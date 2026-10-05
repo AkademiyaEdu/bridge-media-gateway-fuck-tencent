@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, rename, unlink, writeFile } from "node:fs/promises";
+import { access, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { User } from "discord.js";
 import { AvatarDB } from "./db.js";
@@ -29,6 +29,7 @@ export class AvatarStore {
 
     const task = this.update(id).finally(() => {
       this.pending.delete(id);
+      this.latest.delete(id);
     });
     this.pending.set(id, task);
     return task;
@@ -61,7 +62,6 @@ export class AvatarStore {
 
       if (url !== this.latest.get(id)) continue;
 
-      await mkdir(this.dir, { recursive: true });
       const temporary = join(this.dir, `${id}.${randomUUID()}.tmp`);
 
       try {

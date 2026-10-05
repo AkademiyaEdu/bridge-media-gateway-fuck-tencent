@@ -83,14 +83,14 @@ Content-Type: application/json
 ]
 ```
 
-请求体是图片临时 URL 数组，不需要额外传资源 ID。本进程会从 URL 本身解析来源标识，并立即并发下载。
+请求体是图片临时 URL 数组，不需要额外传资源 ID。本进程会立即并发下载。
 
-目前只接受两类来源：
+目前只接受 HTTPS 的两个来源域名：
 
-- `https://cdn.discordapp.com/attachments/...`
-- `https://multimedia.nt.qq.com.cn/download?...&fileid=...`
+- `cdn.discordapp.com`，包括 attachment、emoji 等 CDN 资源
+- `multimedia.nt.qq.com.cn`
 
-其他 URL 会被拒绝。Discord URL 会解析路径中的资源 ID，QQ URL 会解析查询参数中的 `fileid`；两者只用于下载期间的并发去重，永久文件名始终由下载内容的 SHA-256 决定。
+其他 URL 会被拒绝。服务不依赖具体 URL 路径格式，永久文件名始终由下载内容的 SHA-256 决定。
 
 接口按请求顺序返回永久 URL：
 
