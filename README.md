@@ -2,7 +2,7 @@
 
 QQ/Discord 桥的独立图片存储进程。目前负责监听 Discord 用户头像，以及保存 Discord / QQ 两侧需要长期公网访问的图片。
 
-Discord 和 QQ 图片共用 `IMAGE_DIR`。下载完成后按内容计算 SHA-256，并保存为 `{sha256}.{ext}`，因此两侧字节完全相同的图片只会存一份。
+Discord 和 QQ 图片共用 `IMAGE_DIR`。下载完成后按内容计算 SHA-256，并结合响应图片类型保存为 `{sha256}.{ext}`；相同内容且类型一致的图片只会存一份。
 
 ## Nix package
 
@@ -101,7 +101,7 @@ Content-Type: application/json
 ]
 ```
 
-Discord 和 QQ 共用同一个目录及命名空间，因此相同内容会自动去重；并发写入同一内容也会合并到同一个最终文件。所有图片都通过 `/images/` 暴露。
+Discord 和 QQ 共用同一个目录及命名空间，因此相同内容且类型一致时会自动去重；并发写入同一内容也会合并到同一个最终文件。所有图片都通过 `/images/` 暴露。
 
 `GET /healthz` 不需要鉴权。写接口使用 Bearer Token；公网部署时应由 Nginx/Caddy 提供 HTTPS，Node 继续监听 `127.0.0.1`。
 
