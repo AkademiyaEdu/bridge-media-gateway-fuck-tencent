@@ -24,9 +24,7 @@ export class ImageStore {
   ) {}
 
   save(urls: readonly string[]): Promise<string[]> {
-    return Promise.all(
-      urls.map((url) => this.store(this.validateSource(url))),
-    );
+    return Promise.all(urls.map((url) => this.store(this.validateSource(url))));
   }
 
   private validateSource(url: string): URL {
@@ -35,7 +33,8 @@ export class ImageStore {
     if (
       source.protocol === "https:" &&
       (source.hostname === "cdn.discordapp.com" ||
-        source.hostname === "multimedia.nt.qq.com.cn")
+        source.hostname === "multimedia.nt.qq.com.cn" ||
+        source.hostname === "media.discordapp.net")
     ) {
       return source;
     }
