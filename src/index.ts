@@ -1,7 +1,7 @@
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { mkdir } from "node:fs/promises";
 import { config } from "./config.js";
-import { AvatarDB } from "./db.js";
+import { MediaDatabase } from "./db.js";
 import { AvatarStore } from "./avatar.js";
 import { FileStore } from "./file.js";
 import { ImageStore } from "./image.js";
@@ -12,11 +12,11 @@ await Promise.all([
   mkdir(config.imageDir, { recursive: true }),
 ]);
 
-const db = new AvatarDB(config.dbPath);
+const db = new MediaDatabase(config.dbPath);
 const avatars = new AvatarStore(config.avatarDir, db);
 const images = new ImageStore(config.imageDir, config.publicBaseUrl);
 const files = new FileStore(
-  config.dbPath,
+  db,
   config.publicBaseUrl,
   config.snowluma.url,
   config.snowluma.token,
@@ -60,7 +60,6 @@ await client.login(config.token);
 function stop(): void {
   server.close();
   client.destroy();
-  files.close();
   db.close();
 }
 

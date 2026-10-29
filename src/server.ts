@@ -4,7 +4,8 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import type { FileStore, GroupFile } from "./file.js";
+import type { GroupFile } from "./db.js";
+import type { FileStore } from "./file.js";
 import type { ImageStore } from "./image.js";
 
 const MAX_BODY_SIZE = 64 * 1024;

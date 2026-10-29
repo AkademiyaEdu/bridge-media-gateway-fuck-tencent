@@ -1,65 +1,23 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-
-export interface GroupFile {
-  groupId: number;
-  fileId: string;
-  busId: number;
-}
+import type { GroupFile, MediaDatabase } from "./db.js";
 
 export class FileStore {
-  private readonly db: DatabaseSync;
-  private readonly insertFile;
-  private readonly findFile;
-  private readonly findFileId;
-
   constructor(
-    dbPath: string,
+    private readonly db: MediaDatabase,
     private readonly publicBaseUrl: string,
     private readonly snowlumaUrl: string,
     private readonly snowlumaToken?: string,
-  ) {
-    mkdirSync(dirname(dbPath), { recursive: true });
-    this.db = new DatabaseSync(dbPath);
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS media_file (
-        id TEXT PRIMARY KEY,
-        group_id INTEGER NOT NULL,
-        file_id TEXT NOT NULL,
-        bus_id INTEGER NOT NULL,
-        UNIQUE (group_id, file_id, bus_id)
-      ) STRICT
-    `);
-    this.insertFile = this.db.prepare(
-      "INSERT OR IGNORE INTO media_file (id, group_id, file_id, bus_id) VALUES (?, ?, ?, ?)",
-    );
-    this.findFile = this.db.prepare(
-      "SELECT group_id, file_id, bus_id FROM media_file WHERE id = ?",
-    );
-    this.findFileId = this.db.prepare(
-      "SELECT id FROM media_file WHERE group_id = ? AND file_id = ? AND bus_id = ?",
-    );
-  }
+  ) {}
 
   register(file: GroupFile): { id: string; url: string } {
-    this.insertFile.run(randomUUID(), file.groupId, file.fileId, file.busId);
-    const row = this.findFileId.get(file.groupId, file.fileId, file.busId) as {
-      id: string;
-    };
-
+    const id = this.db.registerFile(file);
     return {
-      id: row.id,
-      url: new URL(`/media/${row.id}`, this.publicBaseUrl).toString(),
+      id,
+      url: new URL(`/media/${id}`, this.publicBaseUrl).toString(),
     };
   }
 
   async getDownloadUrl(id: string): Promise<string | null> {
-    const file = this.findFile.get(id) as
-      | { group_id: number; file_id: string; bus_id: number }
-      | undefined;
-
+    const file = this.db.getFile(id);
     if (!file) return null;
 
     const response = await fetch(this.snowlumaUrl, {
@@ -73,9 +31,9 @@ export class FileStore {
       body: JSON.stringify({
         action: "get_group_file_url",
         params: {
-          group_id: file.group_id,
-          file_id: file.file_id,
-          busid: file.bus_id,
+          group_id: file.groupId,
+          file_id: file.fileId,
+          busid: file.busId,
         },
       }),
       signal: AbortSignal.timeout(15_000),
@@ -103,9 +61,5 @@ export class FileStore {
       throw new Error("SnowLuma returned a non-HTTPS file URL");
     }
     return url.toString();
-  }
-
-  close(): void {
-    this.db.close();
   }
 }
