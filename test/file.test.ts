@@ -4,6 +4,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { MediaDatabase } from "../src/db.js";
 import { FileStore } from "../src/file.js";
 import { ImageStore } from "../src/image.js";
 import { createStorageServer } from "../src/server.js";
@@ -53,7 +54,10 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
 
   const snowlumaUrl = await listen(snowluma);
   const dbPath = join(dir, "test.db");
-  const files = new FileStore(dbPath, "https://media.example.com", snowlumaUrl, "snowluma-secret");
+  const db = new MediaDatabase(dbPath);
+  const files = new FileStore(db, "https://media.example.com", snowlumaUrl, "snowluma-secret");
+  db.saveAvatarUrl("123", "https://cdn.discordapp.com/avatars/123/test.webp");
+  assert.equal(db.getAvatarUrl("123"), "https://cdn.discordapp.com/avatars/123/test.webp");
   const images = new ImageStore(join(dir, "images"), "https://media.example.com");
   const gateway = createStorageServer(images, files, "gateway-secret");
   const gatewayUrl = await listen(gateway);
@@ -129,7 +133,7 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
   } finally {
     await close(gateway);
     await close(snowluma);
-    files.close();
+    db.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });

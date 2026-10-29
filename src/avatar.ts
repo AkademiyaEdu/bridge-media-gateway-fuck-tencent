@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { access, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { User } from "discord.js";
-import { AvatarDB } from "./db.js";
+import type { MediaDatabase } from "./db.js";
 
 export function avatarKey(url: string): string {
   const path = new URL(url).pathname;
@@ -16,7 +16,7 @@ export class AvatarStore {
 
   constructor(
     private readonly dir: string,
-    private readonly db: AvatarDB,
+    private readonly db: MediaDatabase,
   ) {}
 
   save(user: Pick<User, "id" | "displayAvatarURL">): Promise<void> {
@@ -39,7 +39,7 @@ export class AvatarStore {
     for (;;) {
       const url = this.latest.get(id)!;
       const path = join(this.dir, `${id}.webp`);
-      const previous = this.db.get(id);
+      const previous = this.db.getAvatarUrl(id);
 
       if (previous && avatarKey(previous) === avatarKey(url)) {
         try {
@@ -68,7 +68,7 @@ export class AvatarStore {
         await writeFile(temporary, image);
         if (url !== this.latest.get(id)) continue;
         await rename(temporary, path);
-        this.db.save(id, url);
+        this.db.saveAvatarUrl(id, url);
         console.log(`[avatar] ${id} updated`);
       } finally {
         await unlink(temporary).catch(() => {});
