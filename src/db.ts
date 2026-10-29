@@ -80,11 +80,6 @@ export class MediaDatabase {
       if (this.insertFileStatement.run(id, file.groupId, file.fileId, file.busId).changes) {
         return id;
       }
-      // The generated ID may already belong to another file.
-      const saved = this.findFileIdStatement.get(file.groupId, file.fileId, file.busId) as
-        | { id: string }
-        | undefined;
-      if (saved) return saved.id;
     }
   }
 
