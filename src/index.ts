@@ -8,20 +8,20 @@ import { ImageStore } from "./image.js";
 import { createStorageServer } from "./server.js";
 
 await Promise.all([
-  mkdir(config.avatarDir, { recursive: true }),
-  mkdir(config.imageDir, { recursive: true }),
+  mkdir(config.storage.avatarDir, { recursive: true }),
+  mkdir(config.storage.imageDir, { recursive: true }),
 ]);
 
-const db = new MediaDatabase(config.dbPath);
-const avatars = new AvatarStore(config.avatarDir, db);
-const images = new ImageStore(config.imageDir, config.publicBaseUrl);
+const db = new MediaDatabase(config.db.path);
+const avatars = new AvatarStore(config.storage.avatarDir, db);
+const images = new ImageStore(config.storage.imageDir, config.storage.publicBaseUrl);
 const files = new FileStore(
   db,
-  config.publicBaseUrl,
+  config.storage.publicBaseUrl,
   config.snowluma.url,
-  config.snowluma.token,
+  config.snowluma.accessToken,
 );
-const server = createStorageServer(images, files, config.apiToken);
+const server = createStorageServer(images, files, config.storage.apiToken);
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
@@ -35,7 +35,7 @@ function update(user: Parameters<AvatarStore["save"]>[0]): void {
 client.on(Events.MessageCreate, (msg) => {
   if (
     !msg.author.bot &&
-    (!config.channelId || msg.channelId === config.channelId)
+    (!config.discord.channelId || msg.channelId === config.discord.channelId)
   ) {
     update(msg.author);
   }
@@ -55,7 +55,7 @@ server.listen(config.http.port, config.http.host, () => {
   console.log(`[http] http://${config.http.host}:${config.http.port}`);
 });
 
-await client.login(config.token);
+await client.login(config.discord.token);
 
 function stop(): void {
   server.close();

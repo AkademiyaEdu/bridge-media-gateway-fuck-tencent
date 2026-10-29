@@ -4,7 +4,8 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { MediaDatabase } from "../src/db.js";
+import { MediaDatabase, generateMediaId } from "../src/db.js";
+import { DatabaseSync } from "node:sqlite";
 import { FileStore } from "../src/file.js";
 import { ImageStore } from "../src/image.js";
 import { createStorageServer } from "../src/server.js";
@@ -81,7 +82,13 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
     const first = await register(file);
     assert.equal(first.status, 201);
     const stored = (await first.json()) as { id: string; url: string };
+    assert.match(stored.id, /^[a-zA-Z0-9]{11}$/);
     assert.equal(stored.url, `https://media.example.com/media/${stored.id}`);
+    assert.equal(db.getFile(stored.id)?.fileId, file.fileId);
+
+    const reopened = new MediaDatabase(dbPath);
+    assert.equal(reopened.registerFile(file), stored.id);
+    reopened.close();
 
     const second = (await (await register(file)).json()) as { id: string; url: string };
     assert.deepEqual(second, stored);
@@ -90,6 +97,7 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
       id: string;
     };
     assert.notEqual(differentBus.id, stored.id);
+    assert.match(differentBus.id, /^[a-zA-Z0-9]{11}$/);
 
     const redirect = await fetch(new URL(`media/${stored.id}`, gatewayUrl), {
       redirect: "manual",
@@ -116,6 +124,17 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
       },
     ]);
 
+    // Files registered by the previous UUID implementation keep working.
+    const oldId = "2e48cc68-9e5c-48d1-9524-080e6ee8ff54";
+    const connection = new DatabaseSync(dbPath);
+    connection.prepare("INSERT INTO media_file (id, group_id, file_id, bus_id) VALUES (?, ?, ?, ?)")
+      .run(oldId, 1107219739, "legacy-file", 102);
+    connection.close();
+    const oldRedirect = await fetch(new URL(`media/${oldId}`, gatewayUrl), {
+      redirect: "manual",
+    });
+    assert.equal(oldRedirect.status, 302);
+
     const unknown = await fetch(new URL("media/00000000-0000-0000-0000-000000000000", gatewayUrl), {
       redirect: "manual",
     });
@@ -135,5 +154,13 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
     await close(snowluma);
     db.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("11-character Base62 IDs are well-formed and non-repeating in a sample", () => {
+  const ids = Array.from({ length: 2000 }, generateMediaId);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const id of ids) {
+    assert.match(id, /^[a-zA-Z0-9]{11}$/);
   }
 });
