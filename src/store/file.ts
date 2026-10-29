@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import type { MediaDatabase } from "./db.js";
+import type { MediaDatabase } from "../db.js";
 
 export interface GroupFile {
   groupId: number;

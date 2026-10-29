@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
-import type { FileStore } from "./file.js";
-import type { ImageStore } from "./image.js";
+import type { FileStore } from "./store/file.js";
+import type { ImageStore } from "./store/image.js";
 import { registerHealthEndpoint } from "./endpoint/health.js";
 import { registerImageEndpoint } from "./endpoint/image.js";
 import { registerMediaEndpoint } from "./endpoint/media.js";

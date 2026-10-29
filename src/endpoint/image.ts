@@ -1,4 +1,4 @@
-import type { ImageStore } from "../image.js";
+import type { ImageStore } from "../store/image.js";
 import { authorized, readJson, send } from "./common.js";
 import type { Router } from "./router.js";
 

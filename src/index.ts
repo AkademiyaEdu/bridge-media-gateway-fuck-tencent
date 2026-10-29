@@ -2,9 +2,9 @@ import { Client, Events, GatewayIntentBits } from "discord.js";
 import { mkdir } from "node:fs/promises";
 import { config } from "./config.js";
 import { MediaDatabase } from "./db.js";
-import { AvatarStore } from "./avatar.js";
-import { FileStore } from "./file.js";
-import { ImageStore } from "./image.js";
+import { AvatarStore } from "./store/avatar.js";
+import { FileStore } from "./store/file.js";
+import { ImageStore } from "./store/image.js";
 import { createStorageServer } from "./server.js";
 
 await Promise.all([

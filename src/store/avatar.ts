@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { access, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { User } from "discord.js";
-import type { MediaDatabase } from "./db.js";
+import type { MediaDatabase } from "../db.js";
 
 export function avatarKey(url: string): string {
   const path = new URL(url).pathname;
