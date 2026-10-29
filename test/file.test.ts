@@ -4,9 +4,8 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { MediaDatabase, generateMediaId } from "../src/db.js";
-import { DatabaseSync } from "node:sqlite";
-import { FileStore } from "../src/file.js";
+import { MediaDatabase } from "../src/db.js";
+import { FileStore, generateMediaId } from "../src/file.js";
 import { ImageStore } from "../src/image.js";
 import { createStorageServer } from "../src/server.js";
 
@@ -57,8 +56,8 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
   const dbPath = join(dir, "test.db");
   const db = new MediaDatabase(dbPath);
   const files = new FileStore(db, "https://media.example.com", snowlumaUrl, "snowluma-secret");
-  db.saveAvatarUrl("123", "https://cdn.discordapp.com/avatars/123/test.webp");
-  assert.equal(db.getAvatarUrl("123"), "https://cdn.discordapp.com/avatars/123/test.webp");
+  db.saveAvatar.run("123", "https://cdn.discordapp.com/avatars/123/test.webp");
+  assert.equal((db.getAvatar.get("123") as { url: string }).url, "https://cdn.discordapp.com/avatars/123/test.webp");
   const images = new ImageStore(join(dir, "images"), "https://media.example.com");
   const gateway = createStorageServer(images, files, "gateway-secret");
   const gatewayUrl = await listen(gateway);
@@ -84,10 +83,10 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
     const stored = (await first.json()) as { id: string; url: string };
     assert.match(stored.id, /^[a-zA-Z0-9]{11}$/);
     assert.equal(stored.url, `https://media.example.com/media/${stored.id}`);
-    assert.equal(db.getFile(stored.id)?.fileId, file.fileId);
+    assert.equal((db.findFile.get(stored.id) as { file_id: string }).file_id, file.fileId);
 
     const reopened = new MediaDatabase(dbPath);
-    assert.equal(reopened.registerFile(file), stored.id);
+    assert.equal(new FileStore(reopened, "https://media.example.com", snowlumaUrl).register(file).id, stored.id);
     reopened.close();
 
     const second = (await (await register(file)).json()) as { id: string; url: string };
@@ -126,10 +125,7 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
 
     // Files registered by the previous UUID implementation keep working.
     const oldId = "2e48cc68-9e5c-48d1-9524-080e6ee8ff54";
-    const connection = new DatabaseSync(dbPath);
-    connection.prepare("INSERT INTO media_file (id, group_id, file_id, bus_id) VALUES (?, ?, ?, ?)")
-      .run(oldId, 1107219739, "legacy-file", 102);
-    connection.close();
+    db.insertFile.run(oldId, 1107219739, "legacy-file", 102);
     const oldRedirect = await fetch(new URL(`media/${oldId}`, gatewayUrl), {
       redirect: "manual",
     });

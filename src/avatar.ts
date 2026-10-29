@@ -39,7 +39,7 @@ export class AvatarStore {
     for (;;) {
       const url = this.latest.get(id)!;
       const path = join(this.dir, `${id}.webp`);
-      const previous = this.db.getAvatarUrl(id);
+      const previous = (this.db.getAvatar.get(id) as { url: string } | undefined)?.url;
 
       if (previous && avatarKey(previous) === avatarKey(url)) {
         try {
@@ -68,7 +68,7 @@ export class AvatarStore {
         await writeFile(temporary, image);
         if (url !== this.latest.get(id)) continue;
         await rename(temporary, path);
-        this.db.saveAvatarUrl(id, url);
+        this.db.saveAvatar.run(id, url);
         console.log(`[avatar] ${id} updated`);
       } finally {
         await unlink(temporary).catch(() => {});
