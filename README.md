@@ -1,6 +1,6 @@
-# Bridge Image Storage
+# Bridge Media Gateway
 
-QQ/Discord 桥的独立图片存储进程。目前负责监听 Discord 用户头像，以及保存 Discord / QQ 两侧需要长期公网访问的图片。
+QQ/Discord 桥的独立媒体进程。负责 Discord 头像、QQ/Discord 图片持久化，以及 QQ 群文件的动态下载重定向。
 
 Discord 和 QQ 图片共用 `IMAGE_DIR`。下载完成后按内容计算 SHA-256，并结合响应图片类型保存为 `{sha256}.{ext}`；相同内容且类型一致的图片只会存一份。
 
@@ -56,6 +56,8 @@ AVATAR_DIR=./data/avatars
 IMAGE_DIR=./data/images
 PUBLIC_BASE_URL=https://brg-img.example.com
 STORAGE_API_TOKEN=与主桥共享的随机Token
+SNOWLUMA_API_URL=http://127.0.0.1:3000/
+SNOWLUMA_API_TOKEN=SnowLuma 的 OneBot HTTP Access Token（可选）
 HTTP_HOST=127.0.0.1
 HTTP_PORT=8787
 ```
@@ -107,7 +109,7 @@ Discord 和 QQ 共用同一个目录及命名空间，因此相同内容且类�
 
 ## 静态文件
 
-本进程只提供控制 API，不直接提供图片文件。由 Nginx、Caddy 或 CDN 读取数据目录：
+图片仍由 Nginx、Caddy 或 CDN 直接读取数据目录；新的动态媒体下载路由交给本进程处理：
 
 ```nginx
 location /avatars/ {
@@ -119,6 +121,52 @@ location /images/ {
     alias /mnt/gdrive/bridge-img-storage/images/;
     add_header Cache-Control "public, max-age=31536000, immutable";
 }
+
+location /media/ {
+    proxy_pass http://127.0.0.1:8787;
+}
+
+location = /media {
+    proxy_pass http://127.0.0.1:8787;
+}
 ```
 
 头像文件名是 `{userid}.webp`，会被覆盖，因此不能长期 immutable。图片 URL 由内容 SHA-256 决定，不会变化，可以长期缓存。
+
+## QQ 群文件动态重定向
+
+Media Gateway 只登记群文件身份，不下载或持久化文件本体。主桥完成消息配对和大小判断后，通过 Bearer Token 登记文件：
+
+```http
+POST /media
+Authorization: Bearer <STORAGE_API_TOKEN>
+Content-Type: application/json
+
+{
+  "type": "file",
+  "groupId": 1107219739,
+  "fileId": "原始 QQ 群文件 file_id",
+  "busId": 104
+}
+```
+
+`busId` 不提供时使用 SnowLuma 默认值 `102`；有真实 `busid` 时应传实际值。相同的 `groupId + fileId + busId` 重复登记会返回同一媒体 ID。成功返回 HTTP 201：
+
+```json
+{
+  "id": "2e48cc68-9e5c-48d1-9524-080e6ee8ff54",
+  "url": "https://media.example.com/media/2e48cc68-9e5c-48d1-9524-080e6ee8ff54"
+}
+```
+
+Discord 消息使用返回的固定 URL。公开的 `GET /media/:id` 和 `HEAD /media/:id` 每次请求都会：
+
+1. 根据 SQLite 中保存的群号、`file_id` 和 `busid` 查找文件；
+2. 请求 SnowLuma 的 OneBot Action `get_group_file_url`；
+3. 用 `302 Found` 和 `Cache-Control: no-store` 重定向到新的腾讯 FTN 下载 URL。
+
+不存在的媒体 ID 返回 404；SnowLuma 请求或刷新失败返回 502，不会重定向到已知过期的 URL。**URL 可刷新不代表 QQ 文件本体不会过期或被删除。**
+
+`SNOWLUMA_API_URL` 应指向 Media Gateway 能访问的 **SnowLuma OneBot HTTP 服务地址**（默认 `http://127.0.0.1:3000/`），而非 WebSocket URL；如 OneBot HTTP 开启了 Access Token，填入 `SNOWLUMA_API_TOKEN`。SnowLuma HTTP 无需向公网开放。
+
+`POST /media` 和 `POST /api/images` 都需要 `STORAGE_API_TOKEN`，公开的下载端点不需要 Token。这个阶段只支持 `type: "file"`；原生视频刷新留待后续实现。
