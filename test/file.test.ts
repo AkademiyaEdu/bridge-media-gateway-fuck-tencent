@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { MediaDatabase } from "../src/db.js";
-import { FileStore, generateMediaId } from "../src/file.js";
-import { ImageStore } from "../src/image.js";
+import { FileStore, generateMediaId } from "../src/store/file.js";
+import { ImageStore } from "../src/store/image.js";
 import { createStorageServer } from "../src/server.js";
 
 function listen(server: Server): Promise<string> {

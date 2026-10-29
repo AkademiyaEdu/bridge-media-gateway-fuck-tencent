@@ -1,4 +1,4 @@
-import type { FileStore, GroupFile } from "../file.js";
+import type { FileStore, GroupFile } from "../store/file.js";
 import { authorized, readJson, send } from "./common.js";
 import type { Router } from "./router.js";
 
