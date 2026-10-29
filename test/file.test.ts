@@ -56,8 +56,8 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
   const dbPath = join(dir, "test.db");
   const db = new MediaDatabase(dbPath);
   const files = new FileStore(db, "https://media.example.com", snowlumaUrl, "snowluma-secret");
-  db.saveAvatar.run("123", "https://cdn.discordapp.com/avatars/123/test.webp");
-  assert.equal((db.getAvatar.get("123") as { url: string }).url, "https://cdn.discordapp.com/avatars/123/test.webp");
+  db.upsertAvatar.run("123", "https://cdn.discordapp.com/avatars/123/test.webp");
+  assert.equal((db.avatarUrlById.get("123") as { url: string }).url, "https://cdn.discordapp.com/avatars/123/test.webp");
   const images = new ImageStore(join(dir, "images"), "https://media.example.com");
   const gateway = createStorageServer(images, files, "gateway-secret");
   const gatewayUrl = await listen(gateway);
@@ -83,7 +83,7 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
     const stored = (await first.json()) as { id: string; url: string };
     assert.match(stored.id, /^[a-zA-Z0-9]{11}$/);
     assert.equal(stored.url, `https://media.example.com/media/${stored.id}`);
-    assert.equal((db.findFile.get(stored.id) as { file_id: string }).file_id, file.fileId);
+    assert.equal((db.fileById.get(stored.id) as { file_id: string }).file_id, file.fileId);
 
     const reopened = new MediaDatabase(dbPath);
     assert.equal(new FileStore(reopened, "https://media.example.com", snowlumaUrl).register(file).id, stored.id);

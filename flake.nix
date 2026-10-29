@@ -1,5 +1,5 @@
 {
-  description = "Bridge image storage";
+  description = "Bridge media gateway";
 
   inputs = { nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"; };
 
@@ -14,7 +14,7 @@
       packages = forAllSystems (pkgs:
         let
           package = pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
-            pname = "bridge-img-storage";
+            pname = "bridge-media-gateway";
             version = "1.0.1";
             src = self;
 
@@ -44,25 +44,25 @@
               rm -rf node_modules
               pnpm install --offline --frozen-lockfile --prod --ignore-scripts
 
-              mkdir -p $out/lib/bridge-img-storage $out/bin
-              cp -r dist node_modules package.json $out/lib/bridge-img-storage/
+              mkdir -p $out/lib/bridge-media-gateway $out/bin
+              cp -r dist node_modules package.json $out/lib/bridge-media-gateway/
 
-              makeWrapper ${pkgs.nodejs_26}/bin/node $out/bin/bridge-img-storage \
-                --add-flags "$out/lib/bridge-img-storage/dist/index.js"
+              makeWrapper ${pkgs.nodejs_26}/bin/node $out/bin/bridge-media-gateway \
+                --add-flags "$out/lib/bridge-media-gateway/dist/index.js"
 
               runHook postInstall
             '';
 
             meta = {
-              description = "Image storage worker for the QQ/Discord bridge";
-              homepage = "https://github.com/AkademiyaEdu/bridge-img-storage";
-              mainProgram = "bridge-img-storage";
+              description = "Media gateway for the QQ/Discord bridge";
+              homepage = "https://github.com/AkademiyaEdu/bridge-media-gateway-fuck-tencent";
+              mainProgram = "bridge-media-gateway";
               platforms = pkgs.lib.platforms.unix;
             };
           });
         in {
           default = package;
-          bridge-img-storage = package;
+          bridge-media-gateway = package;
         });
 
       devShells = forAllSystems (pkgs: {

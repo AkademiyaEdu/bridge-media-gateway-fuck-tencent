@@ -120,12 +120,12 @@ Gateway 不下载 QQ 文件本体。不存在的 ID 返回 404，SnowLuma 刷新
 
 ```nginx
 location /avatars/ {
-    alias /var/lib/bridge-img-storage/avatars/;
+    alias /var/lib/bridge-media-gateway/avatars/;
     add_header Cache-Control "public, max-age=60, must-revalidate";
 }
 
 location /images/ {
-    alias /mnt/gdrive/bridge-img-storage/images/;
+    alias /mnt/gdrive/bridge-media-gateway/images/;
     add_header Cache-Control "public, max-age=31536000, immutable";
 }
 
@@ -138,11 +138,11 @@ Node 默认监听 `127.0.0.1:8787`。公网只放行需要公开的媒体访问�
 
 ## Nix package
 
-当前 Nix 可执行文件名仍保留旧名称 `bridge-img-storage`：
+Nix 可执行文件名为 `bridge-media-gateway`：
 
 ```bash
 nix build github:AkademiyaEdu/bridge-media-gateway-fuck-tencent
-./result/bin/bridge-img-storage
+./result/bin/bridge-media-gateway
 ```
 
 生产时将 `config.json` 放在服务 `WorkingDirectory` 中，或传 `CONFIG_PATH` 指定位置。数据文件应保存在 Nix store 外。

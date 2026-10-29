@@ -14,8 +14,8 @@ export class AvatarStore {
   private readonly client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
   });
-  private readonly pending = new Map<string, Promise<void>>();
-  private readonly latest = new Map<string, string>();
+  private readonly pendingAvatarSaves = new Map<string, Promise<void>>();
+  private readonly latestAvatarUrls = new Map<string, string>();
 
   constructor(
     private readonly dir: string,
@@ -42,17 +42,17 @@ export class AvatarStore {
       !message.author.bot &&
       (!this.discord.channelId || message.channelId === this.discord.channelId)
     ) {
-      this.updateAvatar(message.author);
+      this.saveAvatarFromEvent(message.author);
     }
   }
 
   private handleUserUpdate(before: User, after: User): void {
     if (after.avatar !== before.avatar) {
-      this.updateAvatar(after);
+      this.saveAvatarFromEvent(after);
     }
   }
 
-  private updateAvatar(user: Pick<User, "id" | "displayAvatarURL">): void {
+  private saveAvatarFromEvent(user: Pick<User, "id" | "displayAvatarURL">): void {
     void this.save(user).catch((error) => {
       console.error(`[avatar] ${user.id}:`, error);
     });
@@ -61,29 +61,29 @@ export class AvatarStore {
   save(user: Pick<User, "id" | "displayAvatarURL">): Promise<void> {
     const id = user.id;
     const url = user.displayAvatarURL({ extension: "webp", size: 32 });
-    this.latest.set(id, url);
+    this.latestAvatarUrls.set(id, url);
 
-    const current = this.pending.get(id);
+    const current = this.pendingAvatarSaves.get(id);
     if (current) return current;
 
-    const task = this.update(id).finally(() => {
-      this.pending.delete(id);
-      this.latest.delete(id);
+    const task = this.saveLatestAvatar(id).finally(() => {
+      this.pendingAvatarSaves.delete(id);
+      this.latestAvatarUrls.delete(id);
     });
-    this.pending.set(id, task);
+    this.pendingAvatarSaves.set(id, task);
     return task;
   }
 
-  private async update(id: string): Promise<void> {
+  private async saveLatestAvatar(id: string): Promise<void> {
     for (;;) {
-      const url = this.latest.get(id)!;
+      const url = this.latestAvatarUrls.get(id)!;
       const path = join(this.dir, `${id}.webp`);
-      const previous = (this.db.getAvatar.get(id) as { url: string } | undefined)?.url;
+      const previous = (this.db.avatarUrlById.get(id) as { url: string } | undefined)?.url;
 
       if (previous && avatarKey(previous) === avatarKey(url)) {
         try {
           await access(path);
-          if (url === this.latest.get(id)) return;
+          if (url === this.latestAvatarUrls.get(id)) return;
           continue;
         } catch {
           // Restore a missing file.
@@ -99,21 +99,21 @@ export class AvatarStore {
 
       const image = Buffer.from(await response.arrayBuffer());
 
-      if (url !== this.latest.get(id)) continue;
+      if (url !== this.latestAvatarUrls.get(id)) continue;
 
       const temporary = join(this.dir, `${id}.${randomUUID()}.tmp`);
 
       try {
         await writeFile(temporary, image);
-        if (url !== this.latest.get(id)) continue;
+        if (url !== this.latestAvatarUrls.get(id)) continue;
         await rename(temporary, path);
-        this.db.saveAvatar.run(id, url);
+        this.db.upsertAvatar.run(id, url);
         console.log(`[avatar] ${id} updated`);
       } finally {
         await unlink(temporary).catch(() => {});
       }
 
-      if (url === this.latest.get(id)) return;
+      if (url === this.latestAvatarUrls.get(id)) return;
     }
   }
 }

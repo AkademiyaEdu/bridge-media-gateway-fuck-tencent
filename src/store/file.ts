@@ -26,7 +26,7 @@ export class FileStore {
   ) {}
 
   register(file: GroupFile): { id: string; url: string } {
-    const existing = this.db.findFileId.get(file.groupId, file.fileId, file.busId) as
+    const existing = this.db.fileIdByIdentity.get(file.groupId, file.fileId, file.busId) as
       | { id: string }
       | undefined;
 
@@ -47,7 +47,7 @@ export class FileStore {
   }
 
   async getDownloadUrl(id: string): Promise<string | null> {
-    const file = this.db.findFile.get(id) as
+    const file = this.db.fileById.get(id) as
       | { group_id: number; file_id: string; bus_id: number }
       | undefined;
     if (!file) return null;

@@ -16,15 +16,14 @@ const EXTENSION_BY_CONTENT_TYPE = new Map([
 ]);
 
 export class ImageStore {
-  private readonly pendingContents = new Map<string, Promise<string>>();
-
   constructor(
     private readonly dir: string,
     private readonly publicBaseUrl: string,
   ) {}
 
   save(urls: readonly string[]): Promise<string[]> {
-    return Promise.all(urls.map((url) => this.store(this.validateSource(url))));
+    const sources = urls.map((url) => this.validateSource(url));
+    return Promise.all(sources.map((source) => this.store(source)));
   }
 
   private validateSource(url: string): URL {
@@ -85,55 +84,19 @@ export class ImageStore {
         createWriteStream(temporary, { flags: "wx" }),
       );
 
-      const digest = hash.digest("hex");
-      const url = await this.storeContent(temporary, digest, extension);
+      const filename = `${hash.digest("hex")}.${extension}`;
+      const path = join(this.dir, filename);
+      try {
+        await access(path);
+      } catch {
+        await rename(temporary, path);
+      }
 
-      console.log(`[image] ${digest}.${extension}`);
-      return url;
+      console.log(`[image] ${filename}`);
+      return new URL(`/images/${filename}`, this.publicBaseUrl).toString();
     } finally {
       await unlink(temporary).catch(() => {});
     }
   }
 
-  private storeContent(
-    temporary: string,
-    digest: string,
-    extension: string,
-  ): Promise<string> {
-    const current = this.pendingContents.get(digest);
-
-    if (current) {
-      return current;
-    }
-
-    const task = this.commitContent(temporary, digest, extension).finally(
-      () => {
-        this.pendingContents.delete(digest);
-      },
-    );
-
-    this.pendingContents.set(digest, task);
-    return task;
-  }
-
-  private async commitContent(
-    temporary: string,
-    digest: string,
-    extension: string,
-  ): Promise<string> {
-    const filename = `${digest}.${extension}`;
-    const path = join(this.dir, filename);
-
-    try {
-      await access(path);
-      return this.publicUrl(filename);
-    } catch {
-      await rename(temporary, path);
-      return this.publicUrl(filename);
-    }
-  }
-
-  private publicUrl(filename: string): string {
-    return new URL(`/images/${filename}`, this.publicBaseUrl).toString();
-  }
 }
