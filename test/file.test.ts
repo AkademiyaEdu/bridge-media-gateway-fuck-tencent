@@ -64,7 +64,7 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
   const gatewayUrl = await listen(gateway);
 
   async function register(body: unknown, authorized = true): Promise<Response> {
-    return fetch(new URL("media", gatewayUrl), {
+    return fetch(new URL("api/media", gatewayUrl), {
       method: "POST",
       headers: {
         "content-type": "application/json",
