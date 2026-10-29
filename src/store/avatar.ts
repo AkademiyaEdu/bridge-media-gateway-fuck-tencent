@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { access, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { User } from "discord.js";
+import { Client, Events, GatewayIntentBits, type Message, type User } from "discord.js";
 import type { MediaDatabase } from "../db.js";
 
 export function avatarKey(url: string): string {
@@ -11,13 +11,52 @@ export function avatarKey(url: string): string {
 }
 
 export class AvatarStore {
+  private readonly client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  });
   private readonly pending = new Map<string, Promise<void>>();
   private readonly latest = new Map<string, string>();
 
   constructor(
     private readonly dir: string,
     private readonly db: MediaDatabase,
-  ) {}
+    private readonly discord: { token: string; channelId: string },
+  ) {
+    this.client.on(Events.MessageCreate, (message) => this.handleMessageCreate(message));
+    this.client.on(Events.UserUpdate, (before, after) => this.handleUserUpdate(before, after));
+    this.client.once(Events.ClientReady, (ready) => {
+      console.log(`[discord] ${ready.user.tag}`);
+    });
+  }
+
+  async start(): Promise<void> {
+    await this.client.login(this.discord.token);
+  }
+
+  stop(): void {
+    this.client.destroy();
+  }
+
+  private handleMessageCreate(message: Message): void {
+    if (
+      !message.author.bot &&
+      (!this.discord.channelId || message.channelId === this.discord.channelId)
+    ) {
+      this.updateAvatar(message.author);
+    }
+  }
+
+  private handleUserUpdate(before: User, after: User): void {
+    if (after.avatar !== before.avatar) {
+      this.updateAvatar(after);
+    }
+  }
+
+  private updateAvatar(user: Pick<User, "id" | "displayAvatarURL">): void {
+    void this.save(user).catch((error) => {
+      console.error(`[avatar] ${user.id}:`, error);
+    });
+  }
 
   save(user: Pick<User, "id" | "displayAvatarURL">): Promise<void> {
     const id = user.id;
