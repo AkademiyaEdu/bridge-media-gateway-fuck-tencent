@@ -1,31 +1,25 @@
 import type { FileStore, GroupFile } from "../store/file.js";
 import { authorized, readJson, send } from "./common.js";
-import type { Router } from "./router.js";
+import type { EndpointHandler, Router } from "./router.js";
 
 function parseGroupFile(value: unknown): GroupFile {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Expected a file object");
   }
 
-  const file = value as Record<string, unknown>;
-  const busId = file.busId === undefined ? 102 : file.busId;
+  const { type, groupId, fileId, busId: providedBusId } = value as Record<string, unknown>;
+  const busId = providedBusId === undefined ? 102 : providedBusId;
+
   if (
-    file.type !== "file" ||
-    !Number.isSafeInteger(file.groupId) ||
-    (file.groupId as number) <= 0 ||
-    typeof file.fileId !== "string" ||
-    !file.fileId ||
-    !Number.isSafeInteger(busId) ||
-    (busId as number) < 0
+    type !== "file" ||
+    typeof groupId !== "number" || !Number.isSafeInteger(groupId) || groupId <= 0 ||
+    typeof fileId !== "string" || !fileId ||
+    typeof busId !== "number" || !Number.isSafeInteger(busId) || busId < 0
   ) {
     throw new Error("Invalid file registration");
   }
 
-  return {
-    groupId: file.groupId as number,
-    fileId: file.fileId,
-    busId: busId as number,
-  };
+  return { groupId, fileId, busId };
 }
 
 export function registerMediaEndpoint(router: Router, files: FileStore, apiToken: string): void {
@@ -47,7 +41,7 @@ export function registerMediaEndpoint(router: Router, files: FileStore, apiToken
     });
   });
 
-  const redirectFile: Parameters<Router["get"]>[1] = async (_req, res, { id }) => {
+  const redirectFile: EndpointHandler = async (_req, res, { id }) => {
     try {
       const url = await files.getDownloadUrl(id);
       if (!url) {

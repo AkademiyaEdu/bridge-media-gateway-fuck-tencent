@@ -4,11 +4,11 @@ import { DatabaseSync } from "node:sqlite";
 
 export class MediaDatabase {
   private readonly db: DatabaseSync;
-  public readonly getAvatar;
-  public readonly saveAvatar;
+  public readonly avatarUrlById;
+  public readonly upsertAvatar;
   public readonly insertFile;
-  public readonly findFileId;
-  public readonly findFile;
+  public readonly fileIdByIdentity;
+  public readonly fileById;
 
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -28,18 +28,18 @@ export class MediaDatabase {
       ) STRICT;
     `);
 
-    this.getAvatar = this.db.prepare("SELECT url FROM avatar WHERE id = ?");
-    this.saveAvatar = this.db.prepare(`
+    this.avatarUrlById = this.db.prepare("SELECT url FROM avatar WHERE id = ?");
+    this.upsertAvatar = this.db.prepare(`
       INSERT INTO avatar (id, url) VALUES (?, ?)
       ON CONFLICT(id) DO UPDATE SET url = excluded.url
     `);
     this.insertFile = this.db.prepare(
       "INSERT OR IGNORE INTO media_file (id, group_id, file_id, bus_id) VALUES (?, ?, ?, ?)",
     );
-    this.findFileId = this.db.prepare(
+    this.fileIdByIdentity = this.db.prepare(
       "SELECT id FROM media_file WHERE group_id = ? AND file_id = ? AND bus_id = ?",
     );
-    this.findFile = this.db.prepare(
+    this.fileById = this.db.prepare(
       "SELECT group_id, file_id, bus_id FROM media_file WHERE id = ?",
     );
   }
