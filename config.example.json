@@ -1,0 +1,23 @@
+{
+  "discord": {
+    "token": "",
+    "channelId": ""
+  },
+  "db": {
+    "path": "./data/img.db"
+  },
+  "storage": {
+    "avatarDir": "./data/avatars",
+    "imageDir": "./data/images",
+    "publicBaseUrl": "https://media.example.com",
+    "apiToken": ""
+  },
+  "snowluma": {
+    "url": "http://127.0.0.1:3000/",
+    "accessToken": ""
+  },
+  "http": {
+    "host": "127.0.0.1",
+    "port": 8787
+  }
+}

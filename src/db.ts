@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -7,6 +7,16 @@ export interface GroupFile {
   groupId: number;
   fileId: string;
   busId: number;
+}
+
+const BASE62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+export function generateMediaId(): string {
+  let id = "";
+  for (let index = 0; index < 11; index++) {
+    id += BASE62[randomInt(BASE62.length)];
+  }
+  return id;
 }
 
 export class MediaDatabase {
@@ -60,11 +70,22 @@ export class MediaDatabase {
   }
 
   registerFile(file: GroupFile): string {
-    this.insertFileStatement.run(randomUUID(), file.groupId, file.fileId, file.busId);
-    const row = this.findFileIdStatement.get(file.groupId, file.fileId, file.busId) as {
-      id: string;
-    };
-    return row.id;
+    const existing = this.findFileIdStatement.get(file.groupId, file.fileId, file.busId) as
+      | { id: string }
+      | undefined;
+    if (existing) return existing.id;
+
+    for (;;) {
+      const id = generateMediaId();
+      if (this.insertFileStatement.run(id, file.groupId, file.fileId, file.busId).changes) {
+        return id;
+      }
+      // The generated ID may already belong to another file.
+      const saved = this.findFileIdStatement.get(file.groupId, file.fileId, file.busId) as
+        | { id: string }
+        | undefined;
+      if (saved) return saved.id;
+    }
   }
 
   getFile(id: string): GroupFile | undefined {

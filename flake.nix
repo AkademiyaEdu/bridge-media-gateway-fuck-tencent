@@ -48,7 +48,6 @@
               cp -r dist node_modules package.json $out/lib/bridge-img-storage/
 
               makeWrapper ${pkgs.nodejs_26}/bin/node $out/bin/bridge-img-storage \
-                --add-flags "--env-file-if-exists=.env" \
                 --add-flags "$out/lib/bridge-img-storage/dist/index.js"
 
               runHook postInstall
