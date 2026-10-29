@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { config } from "./config.js";
 import { AvatarDB } from "./db.js";
 import { AvatarStore } from "./avatar.js";
+import { FileStore } from "./file.js";
 import { ImageStore } from "./image.js";
 import { createStorageServer } from "./server.js";
 
@@ -14,7 +15,13 @@ await Promise.all([
 const db = new AvatarDB(config.dbPath);
 const avatars = new AvatarStore(config.avatarDir, db);
 const images = new ImageStore(config.imageDir, config.publicBaseUrl);
-const server = createStorageServer(images, config.apiToken);
+const files = new FileStore(
+  config.dbPath,
+  config.publicBaseUrl,
+  config.snowluma.url,
+  config.snowluma.token,
+);
+const server = createStorageServer(images, files, config.apiToken);
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
@@ -53,6 +60,7 @@ await client.login(config.token);
 function stop(): void {
   server.close();
   client.destroy();
+  files.close();
   db.close();
 }
 
