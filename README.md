@@ -60,7 +60,7 @@ pnpm test
 | --- | --- | --- | --- |
 | GET | `/healthz` | 健康检查（204） | 无 |
 | POST | `/api/images` | 图片镜像 | Bearer API Token |
-| POST | `/media` | 登记 QQ 群文件 | Bearer API Token |
+| POST | `/api/media` | 登记 QQ 群文件 | Bearer API Token |
 | GET / HEAD | `/media/:id` | 刷新 FTN URL 并重定向（302） | 无 |
 
 ### 图片
@@ -81,7 +81,7 @@ pnpm test
 Bridge 完成配对、媒体类型和大小判断后登记文件：
 
 ```http
-POST /media
+POST /api/media
 Authorization: Bearer <storage.apiToken>
 Content-Type: application/json
 

@@ -30,7 +30,7 @@ function parseGroupFile(value: unknown): GroupFile {
 }
 
 export function registerMediaEndpoint(router: Router, files: FileStore, apiToken: string): void {
-  router.post("/media", async (req, res) => {
+  router.post("/api/media", async (req, res) => {
     if (!authorized(req, res, apiToken)) return;
 
     let file: GroupFile;
