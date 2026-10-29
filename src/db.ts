@@ -1,31 +1,14 @@
-import { randomInt } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export interface GroupFile {
-  groupId: number;
-  fileId: string;
-  busId: number;
-}
-
-const BASE62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-export function generateMediaId(): string {
-  let id = "";
-  for (let index = 0; index < 11; index++) {
-    id += BASE62[randomInt(BASE62.length)];
-  }
-  return id;
-}
-
 export class MediaDatabase {
   private readonly db: DatabaseSync;
-  private readonly getAvatarStatement;
-  private readonly saveAvatarStatement;
-  private readonly insertFileStatement;
-  private readonly findFileIdStatement;
-  private readonly findFileStatement;
+  public readonly getAvatar;
+  public readonly saveAvatar;
+  public readonly insertFile;
+  public readonly findFileId;
+  public readonly findFile;
 
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -45,54 +28,20 @@ export class MediaDatabase {
       ) STRICT;
     `);
 
-    this.getAvatarStatement = this.db.prepare("SELECT url FROM avatar WHERE id = ?");
-    this.saveAvatarStatement = this.db.prepare(`
+    this.getAvatar = this.db.prepare("SELECT url FROM avatar WHERE id = ?");
+    this.saveAvatar = this.db.prepare(`
       INSERT INTO avatar (id, url) VALUES (?, ?)
       ON CONFLICT(id) DO UPDATE SET url = excluded.url
     `);
-    this.insertFileStatement = this.db.prepare(
+    this.insertFile = this.db.prepare(
       "INSERT OR IGNORE INTO media_file (id, group_id, file_id, bus_id) VALUES (?, ?, ?, ?)",
     );
-    this.findFileIdStatement = this.db.prepare(
+    this.findFileId = this.db.prepare(
       "SELECT id FROM media_file WHERE group_id = ? AND file_id = ? AND bus_id = ?",
     );
-    this.findFileStatement = this.db.prepare(
+    this.findFile = this.db.prepare(
       "SELECT group_id, file_id, bus_id FROM media_file WHERE id = ?",
     );
-  }
-
-  getAvatarUrl(id: string): string | undefined {
-    return (this.getAvatarStatement.get(id) as { url: string } | undefined)?.url;
-  }
-
-  saveAvatarUrl(id: string, url: string): void {
-    this.saveAvatarStatement.run(id, url);
-  }
-
-  registerFile(file: GroupFile): string {
-    const existing = this.findFileIdStatement.get(file.groupId, file.fileId, file.busId) as
-      | { id: string }
-      | undefined;
-    if (existing) return existing.id;
-
-    for (;;) {
-      const id = generateMediaId();
-      if (this.insertFileStatement.run(id, file.groupId, file.fileId, file.busId).changes) {
-        return id;
-      }
-    }
-  }
-
-  getFile(id: string): GroupFile | undefined {
-    const row = this.findFileStatement.get(id) as
-      | { group_id: number; file_id: string; bus_id: number }
-      | undefined;
-
-    return row && {
-      groupId: row.group_id,
-      fileId: row.file_id,
-      busId: row.bus_id,
-    };
   }
 
   close(): void {

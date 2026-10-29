@@ -1,4 +1,21 @@
-import type { GroupFile, MediaDatabase } from "./db.js";
+import { randomInt } from "node:crypto";
+import type { MediaDatabase } from "./db.js";
+
+export interface GroupFile {
+  groupId: number;
+  fileId: string;
+  busId: number;
+}
+
+const BASE62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+export function generateMediaId(): string {
+  let id = "";
+  for (let index = 0; index < 11; index++) {
+    id += BASE62[randomInt(BASE62.length)];
+  }
+  return id;
+}
 
 export class FileStore {
   constructor(
@@ -9,7 +26,20 @@ export class FileStore {
   ) {}
 
   register(file: GroupFile): { id: string; url: string } {
-    const id = this.db.registerFile(file);
+    const existing = this.db.findFileId.get(file.groupId, file.fileId, file.busId) as
+      | { id: string }
+      | undefined;
+
+    let id = existing?.id;
+    if (!id) {
+      for (;;) {
+        id = generateMediaId();
+        if (this.db.insertFile.run(id, file.groupId, file.fileId, file.busId).changes) {
+          break;
+        }
+      }
+    }
+
     return {
       id,
       url: new URL(`/media/${id}`, this.publicBaseUrl).toString(),
@@ -17,7 +47,9 @@ export class FileStore {
   }
 
   async getDownloadUrl(id: string): Promise<string | null> {
-    const file = this.db.getFile(id);
+    const file = this.db.findFile.get(id) as
+      | { group_id: number; file_id: string; bus_id: number }
+      | undefined;
     if (!file) return null;
 
     const response = await fetch(this.snowlumaUrl, {
@@ -31,9 +63,9 @@ export class FileStore {
       body: JSON.stringify({
         action: "get_group_file_url",
         params: {
-          group_id: file.groupId,
-          file_id: file.fileId,
-          busid: file.busId,
+          group_id: file.group_id,
+          file_id: file.file_id,
+          busid: file.bus_id,
         },
       }),
       signal: AbortSignal.timeout(15_000),
