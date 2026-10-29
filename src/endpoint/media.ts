@@ -12,9 +12,14 @@ function parseGroupFile(value: unknown): GroupFile {
 
   if (
     type !== "file" ||
-    typeof groupId !== "number" || !Number.isSafeInteger(groupId) || groupId <= 0 ||
-    typeof fileId !== "string" || !fileId ||
-    typeof busId !== "number" || !Number.isSafeInteger(busId) || busId < 0
+    typeof groupId !== "number" ||
+    !Number.isSafeInteger(groupId) ||
+    groupId <= 0 ||
+    typeof fileId !== "string" ||
+    !fileId ||
+    typeof busId !== "number" ||
+    !Number.isSafeInteger(busId) ||
+    busId < 0
   ) {
     throw new Error("Invalid file registration");
   }

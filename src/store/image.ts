@@ -98,5 +98,4 @@ export class ImageStore {
       await unlink(temporary).catch(() => {});
     }
   }
-
 }
