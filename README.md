@@ -104,13 +104,15 @@ Content-Type: application/json
 
 新媒体 ID 是 **11 位大小写敏感 Base62**（`a-zA-Z0-9`）随机字符。数据库对 `(groupId, fileId, busId)` 去重，重复登记返回同一 ID。旧版本已经登记的 UUID 仍能正常访问，不需要迁移数据库。
 
-公开的 `GET /media/:id` 与 `HEAD /media/:id` 会查询 SQLite，通过 SnowLuma 的 `get_group_file_url` 获取新 FTN 链接，返回：
+公开的 `GET /media/:id` 与 `HEAD /media/:id` 会查询 SQLite，并通过 SnowLuma 的 `get_group_file_url` 获取 FTN 链接。**每个媒体 ID 的下载 URL 在进程内缓存 5 分钟**：期间所有请求复用缓存；未命中或过期时，同一 ID 的并发请求只会触发一次 SnowLuma 刷新。刷新失败不会缓存，后续请求可以重试。每次访问仍然返回：
 
 ```http
 HTTP/1.1 302 Found
 Location: https://tjc-download.ftn.qq.com/...
 Cache-Control: no-store
 ```
+
+`Cache-Control: no-store` 仍然阻止客户端或 CDN 缓存 302；5 分钟缓存只存在于 Gateway 服务端，缓存到期后会自动清理。
 
 Gateway 不下载 QQ 文件本体。不存在的 ID 返回 404，SnowLuma 刷新失败返回 502。**刷新 URL 不能延长 QQ 文件本身的有效期。** 当前只实现 `type: "file"`，原生 `video` 后续开发。
 

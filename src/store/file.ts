@@ -17,7 +17,12 @@ export function generateMediaId(): string {
   return id;
 }
 
+const DOWNLOAD_URL_CACHE_TTL_MS = 5 * 60 * 1000;
+
 export class FileStore {
+  private readonly downloadUrlCache = new Map<string, { url: string; expiresAt: number }>();
+  private readonly pendingUrlRefreshes = new Map<string, Promise<string | null>>();
+
   constructor(
     private readonly db: MediaDatabase,
     private readonly publicBaseUrl: string,
@@ -46,7 +51,35 @@ export class FileStore {
     };
   }
 
-  async getDownloadUrl(id: string): Promise<string | null> {
+  getDownloadUrl(id: string): Promise<string | null> {
+    const cached = this.downloadUrlCache.get(id);
+    if (cached && cached.expiresAt > Date.now()) {
+      return Promise.resolve(cached.url);
+    }
+
+    const pending = this.pendingUrlRefreshes.get(id);
+    if (pending) return pending;
+
+    const request = this.refreshDownloadUrl(id)
+      .then((url) => {
+        if (url) {
+          const entry = { url, expiresAt: Date.now() + DOWNLOAD_URL_CACHE_TTL_MS };
+          this.downloadUrlCache.set(id, entry);
+          setTimeout(() => {
+            if (this.downloadUrlCache.get(id) === entry) {
+              this.downloadUrlCache.delete(id);
+            }
+          }, DOWNLOAD_URL_CACHE_TTL_MS).unref();
+        }
+        return url;
+      })
+      .finally(() => this.pendingUrlRefreshes.delete(id));
+
+    this.pendingUrlRefreshes.set(id, request);
+    return request;
+  }
+
+  private async refreshDownloadUrl(id: string): Promise<string | null> {
     const file = this.db.fileById.get(id) as
       | { group_id: number; file_id: string; bus_id: number }
       | undefined;
