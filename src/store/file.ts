@@ -53,8 +53,9 @@ export class FileStore {
 
   getDownloadUrl(id: string): Promise<string | null> {
     const cached = this.downloadUrlCache.get(id);
-    if (cached && cached.expiresAt > Date.now()) {
-      return Promise.resolve(cached.url);
+    if (cached) {
+      if (cached.expiresAt > Date.now()) return Promise.resolve(cached.url);
+      this.downloadUrlCache.delete(id);
     }
 
     const pending = this.pendingUrlRefreshes.get(id);
@@ -63,13 +64,10 @@ export class FileStore {
     const request = this.refreshDownloadUrl(id)
       .then((url) => {
         if (url) {
-          const entry = { url, expiresAt: Date.now() + DOWNLOAD_URL_CACHE_TTL_MS };
-          this.downloadUrlCache.set(id, entry);
-          setTimeout(() => {
-            if (this.downloadUrlCache.get(id) === entry) {
-              this.downloadUrlCache.delete(id);
-            }
-          }, DOWNLOAD_URL_CACHE_TTL_MS).unref();
+          this.downloadUrlCache.set(id, {
+            url,
+            expiresAt: Date.now() + DOWNLOAD_URL_CACHE_TTL_MS,
+          });
         }
         return url;
       })
