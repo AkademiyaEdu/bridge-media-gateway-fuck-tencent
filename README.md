@@ -112,7 +112,7 @@ Location: https://tjc-download.ftn.qq.com/...
 Cache-Control: no-store
 ```
 
-`Cache-Control: no-store` 仍然阻止客户端或 CDN 缓存 302；5 分钟缓存只存在于 Gateway 服务端，缓存到期后会自动清理。
+`Cache-Control: no-store` 仍然阻止客户端或 CDN 缓存 302；5 分钟缓存只存在于 Gateway 服务端，过期条目会在下一次访问时删除。
 
 Gateway 不下载 QQ 文件本体。不存在的 ID 返回 404，SnowLuma 刷新失败返回 502。**刷新 URL 不能延长 QQ 文件本身的有效期。** 当前只实现 `type: "file"`，原生 `video` 后续开发。
 
