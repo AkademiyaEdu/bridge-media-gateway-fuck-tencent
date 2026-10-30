@@ -15,7 +15,7 @@ interface RawConfig {
     publicBaseUrl: string;
     apiToken: string;
   };
-  snowluma: {
+  onebot: {
     url: string;
     accessToken: string;
   };

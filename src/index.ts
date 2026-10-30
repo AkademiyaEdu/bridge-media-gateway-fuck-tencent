@@ -17,8 +17,8 @@ const images = new ImageStore(config.storage.imageDir, config.storage.publicBase
 const files = new FileStore(
   db,
   config.storage.publicBaseUrl,
-  config.snowluma.url,
-  config.snowluma.accessToken,
+  config.onebot.url,
+  config.onebot.accessToken,
 );
 const server = createStorageServer(images, files, config.storage.apiToken);
 
