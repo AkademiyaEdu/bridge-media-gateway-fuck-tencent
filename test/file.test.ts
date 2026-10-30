@@ -25,7 +25,9 @@ function close(server: Server): Promise<void> {
   });
 }
 
-test("file registration, on-demand SnowLuma refresh and redirect", async () => {
+test("file registration, cached SnowLuma URL and redirect", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
   const dir = mkdtempSync(join(tmpdir(), "bridge-media-gateway-"));
   const requests: unknown[] = [];
   const snowluma = createServer(async (req, res) => {
@@ -110,8 +112,22 @@ test("file registration, on-demand SnowLuma refresh and redirect", async () => {
       redirect: "manual",
     });
     assert.equal(head.status, 302);
-    assert.equal(head.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=2");
+    assert.equal(head.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1");
+    assert.equal(requests.length, 1);
 
+    now += 5 * 60 * 1000 - 1;
+    const beforeExpiry = await fetch(new URL(`media/${stored.id}`, gatewayUrl), {
+      redirect: "manual",
+    });
+    assert.equal(beforeExpiry.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1");
+    assert.equal(requests.length, 1);
+
+    now++;
+    const refreshed = await fetch(new URL(`media/${stored.id}`, gatewayUrl), {
+      redirect: "manual",
+    });
+    assert.equal(refreshed.status, 302);
+    assert.equal(refreshed.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=2");
     assert.deepEqual(requests, [
       {
         action: "get_group_file_url",
@@ -158,5 +174,62 @@ test("11-character Base62 IDs are well-formed and non-repeating in a sample", ()
   assert.equal(new Set(ids).size, ids.length);
   for (const id of ids) {
     assert.match(id, /^[a-zA-Z0-9]{11}$/);
+  }
+});
+
+test("concurrent refreshes share one SnowLuma request and failures are not cached", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "bridge-media-cache-"));
+  const db = new MediaDatabase(join(dir, "test.db"));
+  const files = new FileStore(db, "https://media.example.com", "http://snowluma.test");
+  const id = files.register({ groupId: 1107219739, fileId: "test-file", busId: 104 }).id;
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+
+  let resolveResponse: (response: Response) => void = () => {};
+  let requests = 0;
+  t.mock.method(globalThis, "fetch", () => {
+    requests++;
+    return new Promise<Response>((resolve) => { resolveResponse = resolve; });
+  });
+
+  const respond = (result: object): void => {
+    resolveResponse(new Response(JSON.stringify(result), {
+      headers: { "content-type": "application/json" },
+    }));
+  };
+  const success = (url: string) => ({
+    status: "ok",
+    data: { url },
+  });
+
+  try {
+    const concurrent = Array.from({ length: 10 }, () => files.getDownloadUrl(id));
+    assert.equal(requests, 1);
+    respond(success("https://tjc-download.ftn.qq.com/first"));
+    assert.deepEqual(await Promise.all(concurrent), Array(10).fill("https://tjc-download.ftn.qq.com/first"));
+
+    assert.equal(await files.getDownloadUrl(id), "https://tjc-download.ftn.qq.com/first");
+    assert.equal(requests, 1);
+
+    now += 5 * 60 * 1000;
+    const first = files.getDownloadUrl(id);
+    const second = files.getDownloadUrl(id);
+    assert.equal(requests, 2);
+
+    const failed = Promise.all([
+      assert.rejects(first, /SnowLuma get_group_file_url failed/),
+      assert.rejects(second, /SnowLuma get_group_file_url failed/),
+    ]);
+    respond({ status: "failed", retcode: 100 });
+    await failed;
+
+    const retry = files.getDownloadUrl(id);
+    assert.equal(requests, 3);
+    respond(success("https://tjc-download.ftn.qq.com/second"));
+    assert.equal(await retry, "https://tjc-download.ftn.qq.com/second");
+    assert.equal(requests, 3);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
