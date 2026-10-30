@@ -1,6 +1,6 @@
 # Bridge Media Gateway
 
-QQ ↔ Discord Bridge 的媒体网关：保存图片、维护 Discord 用户头像，以及为 QQ 群文件提供固定访问地址和动态 HTTP 302 重定向。
+QQ ↔ Discord Bridge 的媒体网关：保存图片、维护 Discord 用户头像，以及为 QQ 群文件和原生视频提供固定访问地址和动态 HTTP 302 重定向。
 
 ## 配置与运行
 
@@ -43,7 +43,7 @@ pnpm dev
 - `storage.publicBaseUrl` 是图片和媒体链接的公网域名。
 - `onebot.url` **必须是 OneBot HTTP API**，不能填 WebSocket 地址；无需公网开放。若未设置 OneBot Token，`accessToken` 可以留空。
 - `config.json` 被 Git 忽略。默认从**当前工作目录**读取，也可以仅通过 `CONFIG_PATH` 指定其它位置（方便 NixOS 服务）。
-- 原有 SQLite `avatar` 表不变；`media_file` 表会自动创建。头像和文件共用一个 `MediaDatabase` 实例。
+- 原有 SQLite `avatar` 表不变；`media_file` 和 `media_video` 表会自动创建。头像、群文件和原生视频共用一个 `MediaDatabase` 实例。
 
 检查：
 
@@ -60,8 +60,8 @@ pnpm test
 | --- | --- | --- | --- |
 | GET | `/healthz` | 健康检查（204） | 无 |
 | POST | `/api/images` | 图片镜像 | Bearer API Token |
-| POST | `/api/media` | 登记 QQ 群文件 | Bearer API Token |
-| GET / HEAD | `/media/:id` | 刷新 FTN URL 并重定向（302） | 无 |
+| POST | `/api/media` | 登记 QQ 群文件或原生视频 | Bearer API Token |
+| GET / HEAD | `/media/:id` | 刷新 QQ 媒体 URL 并重定向（302） | 无 |
 
 ### 图片
 
@@ -102,9 +102,24 @@ Content-Type: application/json
 }
 ```
 
+原生 QQ 视频使用 OneBot 消息 ID 登记：
+
+```http
+POST /api/media
+Authorization: Bearer <storage.apiToken>
+Content-Type: application/json
+
+{
+  "type": "video",
+  "messageId": -1142862561
+}
+```
+
+`messageId` 是 OneBot 消息事件的 `message_id`（**可能为负数**），不是 QQ 官方 Bot 的消息 ID，也不是视频 URL 或文件名。重复登记同一 `messageId` 返回同一短链。网关通过 OneBot `get_msg` 读取 `message` 数组中的 `video.data.url`；若消息已无法读取或找不到有效视频 URL，返回 502。
+
 新媒体 ID 是 **11 位大小写敏感 Base62**（`a-zA-Z0-9`）随机字符。数据库对 `(groupId, fileId, busId)` 去重，重复登记返回同一 ID。旧版本已经登记的 UUID 仍能正常访问，不需要迁移数据库。
 
-公开的 `GET /media/:id` 与 `HEAD /media/:id` 会查询 SQLite，并通过 OneBot 的 `get_group_file_url` 获取 FTN 链接。**每个媒体 ID 的下载 URL 在进程内缓存 5 分钟**：期间所有请求复用缓存；未命中或过期时，同一 ID 的并发请求只会触发一次 OneBot 刷新。刷新失败不会缓存，后续请求可以重试。每次访问仍然返回：
+公开的 `GET /media/:id` 与 `HEAD /media/:id` 会查询 SQLite，群文件通过 OneBot 的 `get_group_file_url` 获取 FTN 链接，原生视频通过 `get_msg` 获取新视频 URL。**每个媒体 ID 的下载 URL 在进程内缓存 5 分钟**：期间所有请求复用缓存；未命中或过期时，同一 ID 的并发请求只会触发一次 OneBot 刷新。刷新失败不会缓存，后续请求可以重试。每次访问仍然返回：
 
 ```http
 HTTP/1.1 302 Found
@@ -114,7 +129,7 @@ Cache-Control: no-store
 
 `Cache-Control: no-store` 仍然阻止客户端或 CDN 缓存 302；5 分钟缓存只存在于 Gateway 服务端，过期条目会在下一次访问时删除。
 
-Gateway 不下载 QQ 文件本体。不存在的 ID 返回 404，OneBot 刷新失败返回 502。**刷新 URL 不能延长 QQ 文件本身的有效期。** 当前只实现 `type: "file"`，原生 `video` 后续开发。
+Gateway 不下载 QQ 媒体本体。不存在的 ID 返回 404，OneBot 刷新失败返回 502。**刷新 URL 不能延长 QQ 媒体本身的有效期。**
 
 ## 反向代理
 

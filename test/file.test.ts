@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { MediaDatabase } from "../src/db.js";
-import { FileStore, generateMediaId } from "../src/store/file.js";
+import { MediaStore, generateMediaId } from "../src/store/media.js";
 import { ImageStore } from "../src/store/image.js";
 import { createStorageServer } from "../src/server.js";
 
@@ -57,7 +57,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
   const onebotUrl = await listen(onebot);
   const dbPath = join(dir, "test.db");
   const db = new MediaDatabase(dbPath);
-  const files = new FileStore(db, "https://media.example.com", onebotUrl, "onebot-secret");
+  const files = new MediaStore(db, "https://media.example.com", onebotUrl, "onebot-secret");
   db.upsertAvatar.run("123", "https://cdn.discordapp.com/avatars/123/test.webp");
   assert.equal((db.avatarUrlById.get("123") as { url: string }).url, "https://cdn.discordapp.com/avatars/123/test.webp");
   const images = new ImageStore(join(dir, "images"), "https://media.example.com");
@@ -78,7 +78,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
   try {
     const file = { type: "file", groupId: 1107219739, fileId: "test-file", busId: 104 };
     assert.equal((await register(file, false)).status, 401);
-    assert.equal((await register({ type: "video", messageId: 1 })).status, 400);
+    assert.equal((await register({ type: "video", messageId: "invalid" })).status, 400);
 
     const first = await register(file);
     assert.equal(first.status, 201);
@@ -88,7 +88,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
     assert.equal((db.fileById.get(stored.id) as { file_id: string }).file_id, file.fileId);
 
     const reopened = new MediaDatabase(dbPath);
-    assert.equal(new FileStore(reopened, "https://media.example.com", onebotUrl).register(file).id, stored.id);
+    assert.equal(new MediaStore(reopened, "https://media.example.com", onebotUrl).registerFile(file).id, stored.id);
     reopened.close();
 
     const second = (await (await register(file)).json()) as { id: string; url: string };
@@ -180,8 +180,8 @@ test("11-character Base62 IDs are well-formed and non-repeating in a sample", ()
 test("concurrent refreshes share one OneBot request and failures are not cached", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "bridge-media-cache-"));
   const db = new MediaDatabase(join(dir, "test.db"));
-  const files = new FileStore(db, "https://media.example.com", "http://onebot.test");
-  const id = files.register({ groupId: 1107219739, fileId: "test-file", busId: 104 }).id;
+  const files = new MediaStore(db, "https://media.example.com", "http://onebot.test");
+  const id = files.registerFile({ groupId: 1107219739, fileId: "test-file", busId: 104 }).id;
   let now = Date.now();
   t.mock.method(Date, "now", () => now);
 

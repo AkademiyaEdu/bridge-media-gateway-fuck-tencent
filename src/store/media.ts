@@ -19,7 +19,7 @@ export function generateMediaId(): string {
 
 const DOWNLOAD_URL_CACHE_TTL_MS = 5 * 60 * 1000;
 
-export class FileStore {
+export class MediaStore {
   private readonly downloadUrlCache = new Map<string, { url: string; expiresAt: number }>();
   private readonly pendingUrlRefreshes = new Map<string, Promise<string | null>>();
 
@@ -30,7 +30,7 @@ export class FileStore {
     private readonly onebotToken?: string,
   ) {}
 
-  register(file: GroupFile): { id: string; url: string } {
+  registerFile(file: GroupFile): { id: string; url: string } {
     const existing = this.db.fileIdByIdentity.get(file.groupId, file.fileId, file.busId) as
       | { id: string }
       | undefined;
@@ -42,6 +42,23 @@ export class FileStore {
         if (this.db.insertFile.run(id, file.groupId, file.fileId, file.busId).changes) {
           break;
         }
+      }
+    }
+
+    return {
+      id,
+      url: new URL(`/media/${id}`, this.publicBaseUrl).toString(),
+    };
+  }
+
+  registerVideo(messageId: number): { id: string; url: string } {
+    const existing = this.db.videoIdByMessageId.get(messageId) as { id: string } | undefined;
+
+    let id = existing?.id;
+    if (!id) {
+      for (;;) {
+        id = generateMediaId();
+        if (this.db.insertVideo.run(id, messageId).changes) break;
       }
     }
 
@@ -81,8 +98,38 @@ export class FileStore {
     const file = this.db.fileById.get(id) as
       | { group_id: number; file_id: string; bus_id: number }
       | undefined;
-    if (!file) return null;
 
+    let rawUrl: string | undefined;
+    if (file) {
+      const data = await this.requestOnebot<{ url?: string }>("get_group_file_url", {
+        group_id: file.group_id,
+        file_id: file.file_id,
+        busid: file.bus_id,
+      });
+      rawUrl = data.url;
+    } else {
+      const video = this.db.videoMessageIdById.get(id) as
+        | { message_id: number }
+        | undefined;
+      if (!video) return null;
+
+      const data = await this.requestOnebot<{
+        message?: { type: string; data?: { url?: string } }[];
+      }>("get_msg", { message_id: video.message_id });
+      rawUrl = data.message?.find((segment) => segment.type === "video")?.data?.url;
+    }
+
+    if (typeof rawUrl !== "string") {
+      throw new Error("OneBot returned no media URL");
+    }
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") {
+      throw new Error("OneBot returned a non-HTTPS media URL");
+    }
+    return url.toString();
+  }
+
+  private async requestOnebot<T>(action: string, params: Record<string, unknown>): Promise<T> {
     const response = await fetch(this.onebotUrl, {
       method: "POST",
       headers: {
@@ -91,14 +138,7 @@ export class FileStore {
           ? { authorization: `Bearer ${this.onebotToken}` }
           : {}),
       },
-      body: JSON.stringify({
-        action: "get_group_file_url",
-        params: {
-          group_id: file.group_id,
-          file_id: file.file_id,
-          busid: file.bus_id,
-        },
-      }),
+      body: JSON.stringify({ action, params }),
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -110,19 +150,13 @@ export class FileStore {
       status?: string;
       retcode?: number;
       wording?: string;
-      data?: { url?: string };
+      data?: T;
     };
-
-    if (result?.status !== "ok" || typeof result.data?.url !== "string") {
+    if (result?.status !== "ok" || !result.data) {
       throw new Error(
-        `OneBot get_group_file_url failed: ${result?.wording ?? result?.retcode ?? "invalid response"}`,
+        `OneBot ${action} failed: ${result?.wording ?? result?.retcode ?? "invalid response"}`,
       );
     }
-
-    const url = new URL(result.data.url);
-    if (url.protocol !== "https:") {
-      throw new Error("OneBot returned a non-HTTPS file URL");
-    }
-    return url.toString();
+    return result.data;
   }
 }

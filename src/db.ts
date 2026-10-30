@@ -9,6 +9,9 @@ export class MediaDatabase {
   public readonly insertFile;
   public readonly fileIdByIdentity;
   public readonly fileById;
+  public readonly insertVideo;
+  public readonly videoIdByMessageId;
+  public readonly videoMessageIdById;
 
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -26,6 +29,11 @@ export class MediaDatabase {
         bus_id INTEGER NOT NULL,
         UNIQUE (group_id, file_id, bus_id)
       ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS media_video (
+        id TEXT PRIMARY KEY,
+        message_id INTEGER NOT NULL UNIQUE
+      ) STRICT;
     `);
 
     this.avatarUrlById = this.db.prepare("SELECT url FROM avatar WHERE id = ?");
@@ -41,6 +49,15 @@ export class MediaDatabase {
     );
     this.fileById = this.db.prepare(
       "SELECT group_id, file_id, bus_id FROM media_file WHERE id = ?",
+    );
+    this.insertVideo = this.db.prepare(
+      "INSERT OR IGNORE INTO media_video (id, message_id) VALUES (?, ?)",
+    );
+    this.videoIdByMessageId = this.db.prepare(
+      "SELECT id FROM media_video WHERE message_id = ?",
+    );
+    this.videoMessageIdById = this.db.prepare(
+      "SELECT message_id FROM media_video WHERE id = ?",
     );
   }
 
