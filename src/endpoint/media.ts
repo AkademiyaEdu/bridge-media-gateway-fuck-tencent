@@ -1,15 +1,27 @@
-import type { FileStore, GroupFile } from "../store/file.js";
+import type { MediaStore, GroupFile } from "../store/media.js";
 import { authorized, readJson, send } from "./common.js";
 import type { EndpointHandler, Router } from "./router.js";
 
-function parseGroupFile(value: unknown): GroupFile {
+type MediaRegistration =
+  | ({ type: "file" } & GroupFile)
+  | { type: "video"; messageId: number };
+
+function parseMediaRegistration(value: unknown): MediaRegistration {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Expected a file object");
+    throw new Error("Expected a media object");
   }
 
-  const { type, groupId, fileId, busId: providedBusId } = value as Record<string, unknown>;
-  const busId = providedBusId === undefined ? 102 : providedBusId;
+  const { type, groupId, fileId, busId: providedBusId, messageId } =
+    value as Record<string, unknown>;
 
+  if (type === "video") {
+    if (typeof messageId !== "number" || !Number.isSafeInteger(messageId)) {
+      throw new Error("Invalid video registration");
+    }
+    return { type, messageId };
+  }
+
+  const busId = providedBusId === undefined ? 102 : providedBusId;
   if (
     type !== "file" ||
     typeof groupId !== "number" ||
@@ -24,31 +36,33 @@ function parseGroupFile(value: unknown): GroupFile {
     throw new Error("Invalid file registration");
   }
 
-  return { groupId, fileId, busId };
+  return { type, groupId, fileId, busId };
 }
 
-export function registerMediaEndpoint(router: Router, files: FileStore, apiToken: string): void {
+export function registerMediaEndpoint(router: Router, media: MediaStore, apiToken: string): void {
   router.post("/api/media", async (req, res) => {
     if (!authorized(req, res, apiToken)) return;
 
-    let file: GroupFile;
+    let registration: MediaRegistration;
     try {
-      file = parseGroupFile(await readJson(req));
+      registration = parseMediaRegistration(await readJson(req));
     } catch {
-      send(res, 400, "Invalid file registration");
+      send(res, 400, "Invalid media registration");
       return;
     }
 
-    const result = files.register(file);
+    const result = registration.type === "file"
+      ? media.registerFile(registration)
+      : media.registerVideo(registration.messageId);
     send(res, 201, JSON.stringify(result), {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
     });
   });
 
-  const redirectFile: EndpointHandler = async (_req, res, { id }) => {
+  const redirectMedia: EndpointHandler = async (_req, res, { id }) => {
     try {
-      const url = await files.getDownloadUrl(id);
+      const url = await media.getDownloadUrl(id);
       if (!url) {
         send(res, 404, "Not Found");
         return;
@@ -59,11 +73,11 @@ export function registerMediaEndpoint(router: Router, files: FileStore, apiToken
         "cache-control": "no-store",
       });
     } catch (error) {
-      console.error(`[file] failed to resolve ${id}:`, error);
-      send(res, 502, "File URL refresh failed", { "cache-control": "no-store" });
+      console.error(`[media] failed to resolve ${id}:`, error);
+      send(res, 502, "Media URL refresh failed", { "cache-control": "no-store" });
     }
   };
 
-  router.get("/media/:id", redirectFile);
-  router.head("/media/:id", redirectFile);
+  router.get("/media/:id", redirectMedia);
+  router.head("/media/:id", redirectMedia);
 }
