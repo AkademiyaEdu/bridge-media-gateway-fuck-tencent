@@ -28,9 +28,9 @@ pnpm dev
     "publicBaseUrl": "https://media.example.com",
     "apiToken": "与主桥共享的 API Token"
   },
-  "snowluma": {
+  "onebot": {
     "url": "http://127.0.0.1:3000/",
-    "accessToken": "SnowLuma OneBot HTTP Access Token"
+    "accessToken": "OneBot HTTP Access Token"
   },
   "http": {
     "host": "127.0.0.1",
@@ -41,7 +41,7 @@ pnpm dev
 
 - `discord.channelId` 留空时，监听 Bot 可见的所有服务器频道消息来更新头像。
 - `storage.publicBaseUrl` 是图片和媒体链接的公网域名。
-- `snowluma.url` **必须是 OneBot HTTP API**，不能填 WebSocket 地址；无需公网开放。若未设置 OneBot Token，`accessToken` 可以留空。
+- `onebot.url` **必须是 OneBot HTTP API**，不能填 WebSocket 地址；无需公网开放。若未设置 OneBot Token，`accessToken` 可以留空。
 - `config.json` 被 Git 忽略。默认从**当前工作目录**读取，也可以仅通过 `CONFIG_PATH` 指定其它位置（方便 NixOS 服务）。
 - 原有 SQLite `avatar` 表不变；`media_file` 表会自动创建。头像和文件共用一个 `MediaDatabase` 实例。
 
@@ -104,7 +104,7 @@ Content-Type: application/json
 
 新媒体 ID 是 **11 位大小写敏感 Base62**（`a-zA-Z0-9`）随机字符。数据库对 `(groupId, fileId, busId)` 去重，重复登记返回同一 ID。旧版本已经登记的 UUID 仍能正常访问，不需要迁移数据库。
 
-公开的 `GET /media/:id` 与 `HEAD /media/:id` 会查询 SQLite，并通过 SnowLuma 的 `get_group_file_url` 获取 FTN 链接。**每个媒体 ID 的下载 URL 在进程内缓存 5 分钟**：期间所有请求复用缓存；未命中或过期时，同一 ID 的并发请求只会触发一次 SnowLuma 刷新。刷新失败不会缓存，后续请求可以重试。每次访问仍然返回：
+公开的 `GET /media/:id` 与 `HEAD /media/:id` 会查询 SQLite，并通过 OneBot 的 `get_group_file_url` 获取 FTN 链接。**每个媒体 ID 的下载 URL 在进程内缓存 5 分钟**：期间所有请求复用缓存；未命中或过期时，同一 ID 的并发请求只会触发一次 OneBot 刷新。刷新失败不会缓存，后续请求可以重试。每次访问仍然返回：
 
 ```http
 HTTP/1.1 302 Found
@@ -114,7 +114,7 @@ Cache-Control: no-store
 
 `Cache-Control: no-store` 仍然阻止客户端或 CDN 缓存 302；5 分钟缓存只存在于 Gateway 服务端，过期条目会在下一次访问时删除。
 
-Gateway 不下载 QQ 文件本体。不存在的 ID 返回 404，SnowLuma 刷新失败返回 502。**刷新 URL 不能延长 QQ 文件本身的有效期。** 当前只实现 `type: "file"`，原生 `video` 后续开发。
+Gateway 不下载 QQ 文件本体。不存在的 ID 返回 404，OneBot 刷新失败返回 502。**刷新 URL 不能延长 QQ 文件本身的有效期。** 当前只实现 `type: "file"`，原生 `video` 后续开发。
 
 ## 反向代理
 

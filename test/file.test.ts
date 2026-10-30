@@ -25,13 +25,13 @@ function close(server: Server): Promise<void> {
   });
 }
 
-test("file registration, cached SnowLuma URL and redirect", async (t) => {
+test("file registration, cached OneBot URL and redirect", async (t) => {
   let now = Date.now();
   t.mock.method(Date, "now", () => now);
   const dir = mkdtempSync(join(tmpdir(), "bridge-media-gateway-"));
   const requests: unknown[] = [];
-  const snowluma = createServer(async (req, res) => {
-    assert.equal(req.headers.authorization, "Bearer snowluma-secret");
+  const onebot = createServer(async (req, res) => {
+    assert.equal(req.headers.authorization, "Bearer onebot-secret");
     let body = "";
     for await (const chunk of req) body += chunk;
     const message = JSON.parse(body) as {
@@ -54,10 +54,10 @@ test("file registration, cached SnowLuma URL and redirect", async (t) => {
     }
   });
 
-  const snowlumaUrl = await listen(snowluma);
+  const onebotUrl = await listen(onebot);
   const dbPath = join(dir, "test.db");
   const db = new MediaDatabase(dbPath);
-  const files = new FileStore(db, "https://media.example.com", snowlumaUrl, "snowluma-secret");
+  const files = new FileStore(db, "https://media.example.com", onebotUrl, "onebot-secret");
   db.upsertAvatar.run("123", "https://cdn.discordapp.com/avatars/123/test.webp");
   assert.equal((db.avatarUrlById.get("123") as { url: string }).url, "https://cdn.discordapp.com/avatars/123/test.webp");
   const images = new ImageStore(join(dir, "images"), "https://media.example.com");
@@ -88,7 +88,7 @@ test("file registration, cached SnowLuma URL and redirect", async (t) => {
     assert.equal((db.fileById.get(stored.id) as { file_id: string }).file_id, file.fileId);
 
     const reopened = new MediaDatabase(dbPath);
-    assert.equal(new FileStore(reopened, "https://media.example.com", snowlumaUrl).register(file).id, stored.id);
+    assert.equal(new FileStore(reopened, "https://media.example.com", onebotUrl).register(file).id, stored.id);
     reopened.close();
 
     const second = (await (await register(file)).json()) as { id: string; url: string };
@@ -163,7 +163,7 @@ test("file registration, cached SnowLuma URL and redirect", async (t) => {
     assert.equal(unavailable.status, 502);
   } finally {
     await close(gateway);
-    await close(snowluma);
+    await close(onebot);
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }
@@ -177,10 +177,10 @@ test("11-character Base62 IDs are well-formed and non-repeating in a sample", ()
   }
 });
 
-test("concurrent refreshes share one SnowLuma request and failures are not cached", async (t) => {
+test("concurrent refreshes share one OneBot request and failures are not cached", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "bridge-media-cache-"));
   const db = new MediaDatabase(join(dir, "test.db"));
-  const files = new FileStore(db, "https://media.example.com", "http://snowluma.test");
+  const files = new FileStore(db, "https://media.example.com", "http://onebot.test");
   const id = files.register({ groupId: 1107219739, fileId: "test-file", busId: 104 }).id;
   let now = Date.now();
   t.mock.method(Date, "now", () => now);
@@ -217,8 +217,8 @@ test("concurrent refreshes share one SnowLuma request and failures are not cache
     assert.equal(requests, 2);
 
     const failed = Promise.all([
-      assert.rejects(first, /SnowLuma get_group_file_url failed/),
-      assert.rejects(second, /SnowLuma get_group_file_url failed/),
+      assert.rejects(first, /OneBot get_group_file_url failed/),
+      assert.rejects(second, /OneBot get_group_file_url failed/),
     ]);
     respond({ status: "failed", retcode: 100 });
     await failed;

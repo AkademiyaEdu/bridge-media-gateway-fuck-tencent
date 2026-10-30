@@ -26,8 +26,8 @@ export class FileStore {
   constructor(
     private readonly db: MediaDatabase,
     private readonly publicBaseUrl: string,
-    private readonly snowlumaUrl: string,
-    private readonly snowlumaToken?: string,
+    private readonly onebotUrl: string,
+    private readonly onebotToken?: string,
   ) {}
 
   register(file: GroupFile): { id: string; url: string } {
@@ -83,12 +83,12 @@ export class FileStore {
       | undefined;
     if (!file) return null;
 
-    const response = await fetch(this.snowlumaUrl, {
+    const response = await fetch(this.onebotUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        ...(this.snowlumaToken
-          ? { authorization: `Bearer ${this.snowlumaToken}` }
+        ...(this.onebotToken
+          ? { authorization: `Bearer ${this.onebotToken}` }
           : {}),
       },
       body: JSON.stringify({
@@ -103,7 +103,7 @@ export class FileStore {
     });
 
     if (!response.ok) {
-      throw new Error(`SnowLuma HTTP ${response.status}`);
+      throw new Error(`OneBot HTTP ${response.status}`);
     }
 
     const result = (await response.json()) as {
@@ -115,13 +115,13 @@ export class FileStore {
 
     if (result?.status !== "ok" || typeof result.data?.url !== "string") {
       throw new Error(
-        `SnowLuma get_group_file_url failed: ${result?.wording ?? result?.retcode ?? "invalid response"}`,
+        `OneBot get_group_file_url failed: ${result?.wording ?? result?.retcode ?? "invalid response"}`,
       );
     }
 
     const url = new URL(result.data.url);
     if (url.protocol !== "https:") {
-      throw new Error("SnowLuma returned a non-HTTPS file URL");
+      throw new Error("OneBot returned a non-HTTPS file URL");
     }
     return url.toString();
   }
