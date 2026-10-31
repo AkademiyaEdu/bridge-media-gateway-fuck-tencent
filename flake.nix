@@ -14,7 +14,7 @@
       packages = forAllSystems (pkgs:
         let
           package = pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
-            pname = "bridge-media-gateway";
+            pname = "bridge-media-gateway-fuck-tencent";
             version = "1.0.1";
             src = self;
 
