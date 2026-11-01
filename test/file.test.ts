@@ -282,3 +282,47 @@ test("existing media_file schema automatically gains file_name", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("in-flight URL refresh uses the latest registered filename", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "bridge-media-filename-race-"));
+  const db = new MediaDatabase(join(dir, "test.db"));
+  const media = new MediaStore(db, "https://media.example.com", "http://onebot.test");
+  const file = { groupId: 123, fileId: "/video-id", busId: 102 };
+
+  let respond: (response: Response) => void = () => {};
+  let requests = 0;
+  t.mock.method(globalThis, "fetch", () => {
+    requests++;
+    return new Promise<Response>((resolve) => { respond = resolve; });
+  });
+
+  try {
+    for (const oldName of [undefined, "old.mp4"]) {
+      const id = media.registerFile({
+        ...file,
+        fileId: oldName ?? "/unnamed-video",
+        ...(oldName ? { fileName: oldName } : {}),
+      }).id;
+      const pending = media.getDownloadUrl(id);
+      assert.equal(requests, oldName ? 2 : 1);
+
+      media.registerFile({
+        ...file,
+        fileId: oldName ?? "/unnamed-video",
+        fileName: "latest.mp4",
+      });
+      respond(new Response(JSON.stringify({
+        status: "ok",
+        data: { url: "https://tjc-download.ftn.qq.com/download?fname=old-id" },
+      })));
+
+      const expected = "https://tjc-download.ftn.qq.com/download?fname=latest.mp4";
+      assert.equal(await pending, expected);
+      assert.equal(await media.getDownloadUrl(id), expected);
+    }
+    assert.equal(requests, 2);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

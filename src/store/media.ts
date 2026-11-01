@@ -132,9 +132,13 @@ export class MediaStore {
     if (url.protocol !== "https:") {
       throw new Error("OneBot returned a non-HTTPS media URL");
     }
-    if (file?.file_name) {
-      url.searchParams.set("fname", file.file_name);
-    } else if (!file) {
+    if (file) {
+      // The file may have been re-registered while OneBot was refreshing its URL.
+      const latestFile = this.db.fileById.get(id) as { file_name: string | null };
+      if (latestFile.file_name) {
+        url.searchParams.set("fname", latestFile.file_name);
+      }
+    } else {
       url.searchParams.set("filename", "placeholder.mp4");
     }
     return url.toString();
