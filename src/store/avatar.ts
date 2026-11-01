@@ -46,7 +46,7 @@ export class AvatarStore {
     }
   }
 
-  private handleUserUpdate(before: User, after: User): void {
+  private handleUserUpdate(before: Pick<User, "avatar">, after: User): void {
     if (after.avatar !== before.avatar) {
       this.saveAvatarFromEvent(after);
     }
