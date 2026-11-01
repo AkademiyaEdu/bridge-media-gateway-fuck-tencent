@@ -5,6 +5,7 @@ export interface GroupFile {
   groupId: number;
   fileId: string;
   busId: number;
+  fileName?: string;
 }
 
 const BASE62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -36,10 +37,15 @@ export class MediaStore {
       | undefined;
 
     let id = existing?.id;
-    if (!id) {
+    if (id) {
+      if (file.fileName) {
+        this.db.updateFileName.run(file.fileName, id);
+        this.downloadUrlCache.delete(id);
+      }
+    } else {
       for (;;) {
         id = generateMediaId();
-        if (this.db.insertFile.run(id, file.groupId, file.fileId, file.busId).changes) {
+        if (this.db.insertFile.run(id, file.groupId, file.fileId, file.busId, file.fileName ?? null).changes) {
           break;
         }
       }
@@ -96,7 +102,7 @@ export class MediaStore {
 
   private async refreshDownloadUrl(id: string): Promise<string | null> {
     const file = this.db.fileById.get(id) as
-      | { group_id: number; file_id: string; bus_id: number }
+      | { group_id: number; file_id: string; bus_id: number; file_name: string | null }
       | undefined;
 
     let rawUrl: string | undefined;
@@ -125,6 +131,11 @@ export class MediaStore {
     const url = new URL(rawUrl);
     if (url.protocol !== "https:") {
       throw new Error("OneBot returned a non-HTTPS media URL");
+    }
+    if (file?.file_name) {
+      url.searchParams.set("fname", file.file_name);
+    } else if (!file) {
+      url.searchParams.set("filename", "placeholder.mp4");
     }
     return url.toString();
   }
