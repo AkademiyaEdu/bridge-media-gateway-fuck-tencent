@@ -118,6 +118,18 @@ Content-Type: application/json
 
 `messageId` 是 OneBot 消息事件的 `message_id`（**可能为负数**），不是 QQ 官方 Bot 的消息 ID，也不是视频 URL 或文件名。重复登记同一 `messageId` 返回同一短链。网关通过 OneBot `get_msg` 读取 `message` 数组中的 `video.data.url`，并向链接添加 `filename=placeholder.mp4`，使腾讯 multimedia CDN 返回正确的视频 MIME 类型；若消息已无法读取或找不到有效视频 URL，返回 502。
 
+合并转发的历史视频无法通过 `get_msg` 读取，改为登记合并转发 ID 和节点序号：
+
+```json
+{
+  "type": "forwardVideo",
+  "forwardId": "OneBot 合并转发 ID",
+  "nodeIndex": 0
+}
+```
+
+网关使用 `get_forward_msg` 重新读取该节点的 `video.data.url`，同样添加 `filename=placeholder.mp4`。节点位置按返回的 `messages` 数组从 0 开始计数。若腾讯返回的是本地路径、链接失效或该合并转发已不可读取，网关会返回 502，无法保证旧转发视频永久可用。
+
 新媒体 ID 是 **11 位大小写敏感 Base62**（`a-zA-Z0-9`）随机字符。数据库对 `(groupId, fileId, busId)` 去重，重复登记返回同一 ID。旧版本已经登记的 UUID 仍能正常访问，不需要迁移数据库。
 
 公开的 `GET /media/:id` 与 `HEAD /media/:id` 会查询 SQLite，群文件通过 OneBot 的 `get_group_file_url` 获取 FTN 链接，原生视频通过 `get_msg` 获取新视频 URL。**每个媒体 ID 的下载 URL 在进程内缓存 5 分钟**：期间所有请求复用缓存；未命中或过期时，同一 ID 的并发请求只会触发一次 OneBot 刷新。刷新失败不会缓存，后续请求可以重试。每次访问仍然返回：

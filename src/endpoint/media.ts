@@ -4,14 +4,15 @@ import type { EndpointHandler, Router } from "./router.js";
 
 type MediaRegistration =
   | ({ type: "file" } & GroupFile)
-  | { type: "video"; messageId: number };
+  | { type: "video"; messageId: number }
+  | { type: "forwardVideo"; forwardId: string; nodeIndex: number };
 
 function parseMediaRegistration(value: unknown): MediaRegistration {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Expected a media object");
   }
 
-  const { type, groupId, fileId, fileName, busId: providedBusId, messageId } =
+  const { type, groupId, fileId, fileName, busId: providedBusId, messageId, forwardId, nodeIndex } =
     value as Record<string, unknown>;
 
   if (type === "video") {
@@ -19,6 +20,19 @@ function parseMediaRegistration(value: unknown): MediaRegistration {
       throw new Error("Invalid video registration");
     }
     return { type, messageId };
+  }
+
+  if (type === "forwardVideo") {
+    if (
+      typeof forwardId !== "string" ||
+      !forwardId ||
+      typeof nodeIndex !== "number" ||
+      !Number.isSafeInteger(nodeIndex) ||
+      nodeIndex < 0
+    ) {
+      throw new Error("Invalid forward video registration");
+    }
+    return { type, forwardId, nodeIndex };
   }
 
   const busId = providedBusId === undefined ? 102 : providedBusId;
@@ -54,7 +68,9 @@ export function registerMediaEndpoint(router: Router, media: MediaStore, apiToke
 
     const result = registration.type === "file"
       ? media.registerFile(registration)
-      : media.registerVideo(registration.messageId);
+      : registration.type === "video"
+        ? media.registerVideo(registration.messageId)
+        : media.registerForwardVideo(registration.forwardId, registration.nodeIndex);
     send(res, 201, JSON.stringify(result), {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",

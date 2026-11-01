@@ -139,3 +139,94 @@ test("native QQ video registration, cached redirects and shared OneBot refresh",
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+
+test("forward video URLs refresh through get_forward_msg, not get_msg", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+
+  const dir = mkdtempSync(join(tmpdir(), "bridge-forward-video-"));
+  const requests: { action: string; params: { id: string } }[] = [];
+  const onebot = createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const request = JSON.parse(body) as { action: string; params: { id: string } };
+    requests.push(request);
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({
+      status: "ok",
+      data: {
+        messages: [
+          { message: [{ type: "text", data: { text: "first" } }] },
+          { message: [{ type: "video", data: {
+            url: `https://multimedia.nt.qq.com.cn/download?forward=1&rkey=${requests.length}`,
+          } }] },
+        ],
+      },
+    }));
+  });
+
+  const onebotUrl = await listen(onebot);
+  const dbPath = join(dir, "media.db");
+  const db = new MediaDatabase(dbPath);
+  const media = new MediaStore(db, "https://media.example.com", onebotUrl);
+  const images = new ImageStore(join(dir, "images"), "https://media.example.com");
+  const gateway = createStorageServer(images, media, "gateway-secret");
+  const gatewayUrl = await listen(gateway);
+
+  const register = (nodeIndex: unknown) => fetch(new URL("api/media", gatewayUrl), {
+    method: "POST",
+    headers: {
+      authorization: "Bearer gateway-secret",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ type: "forwardVideo", forwardId: "forward-123", nodeIndex }),
+  });
+
+  try {
+    assert.equal((await register(-1)).status, 400);
+    assert.equal((await register("1")).status, 400);
+    const first = await register(1);
+    assert.equal(first.status, 201);
+    const video = await first.json() as { id: string; url: string };
+    assert.match(video.id, /^[a-zA-Z0-9]{11}$/);
+    assert.deepEqual(await (await register(1)).json(), video);
+    assert.notEqual((await (await register(0)).json() as { id: string }).id, video.id);
+
+    const reopened = new MediaDatabase(dbPath);
+    assert.equal(
+      new MediaStore(reopened, "https://media.example.com", onebotUrl)
+        .registerForwardVideo("forward-123", 1).id,
+      video.id,
+    );
+    reopened.close();
+
+    const shortUrl = new URL(`media/${video.id}`, gatewayUrl);
+    const firstRedirect = await fetch(shortUrl, { redirect: "manual" });
+    assert.equal(firstRedirect.status, 302);
+    assert.equal(firstRedirect.headers.get("location"),
+      "https://multimedia.nt.qq.com.cn/download?forward=1&rkey=1&filename=placeholder.mp4");
+
+    const cached = await fetch(shortUrl, { redirect: "manual" });
+    assert.equal(cached.headers.get("location"), firstRedirect.headers.get("location"));
+    assert.deepEqual(requests, [{ action: "get_forward_msg", params: { id: "forward-123" } }]);
+
+    now += 5 * 60 * 1000;
+    const refreshed = await fetch(shortUrl, { redirect: "manual" });
+    assert.equal(refreshed.headers.get("location"),
+      "https://multimedia.nt.qq.com.cn/download?forward=1&rkey=2&filename=placeholder.mp4");
+    assert.equal(requests.length, 2);
+
+    const missingVideo = await register(2);
+    const unavailable = await fetch(new URL(
+      `media/${(await missingVideo.json() as { id: string }).id}`,
+      gatewayUrl,
+    ), { redirect: "manual" });
+    assert.equal(unavailable.status, 502);
+  } finally {
+    await close(gateway);
+    await close(onebot);
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
