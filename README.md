@@ -56,12 +56,12 @@ pnpm test
 
 各端点在 `src/endpoint/` 下独立注册，`server.ts` 仅负责接线。
 
-| Method | Path | 说明 | 鉴权 |
-| --- | --- | --- | --- |
-| GET | `/healthz` | 健康检查（204） | 无 |
-| POST | `/api/images` | 图片镜像 | Bearer API Token |
-| POST | `/api/media` | 登记 QQ 群文件或原生视频 | Bearer API Token |
-| GET / HEAD | `/media/:id` | 刷新 QQ 媒体 URL 并重定向（302） | 无 |
+| Method     | Path          | 说明                             | 鉴权             |
+| ---------- | ------------- | -------------------------------- | ---------------- |
+| GET        | `/healthz`    | 健康检查（204）                  | 无               |
+| POST       | `/api/images` | 图片镜像                         | Bearer API Token |
+| POST       | `/api/media`  | 登记 QQ 群文件或原生视频         | Bearer API Token |
+| GET / HEAD | `/media/:id`  | 刷新 QQ 媒体 URL 并重定向（302） | 无               |
 
 ### 图片
 
@@ -163,3 +163,7 @@ nix build github:AkademiyaEdu/bridge-media-gateway-fuck-tencent
 ```
 
 生产时将 `config.json` 放在服务 `WorkingDirectory` 中，或传 `CONFIG_PATH` 指定位置。数据文件应保存在 Nix store 外。
+
+## 许可证 LICENSE
+
+项目采用 GNU General Public License v3.0 许可证，详细条款请见项目根目录下的 LICENSE 文件
