@@ -104,7 +104,7 @@ test("native QQ video registration, cached redirects and shared OneBot refresh",
     for (const response of firstBatch) {
       assert.equal(response.status, 302);
       assert.equal(response.headers.get("location"),
-        "https://multimedia.nt.qq.com.cn/download?clip=1&rkey=1");
+        "https://multimedia.nt.qq.com.cn/download?clip=1&rkey=1&filename=placeholder.mp4");
       assert.equal(response.headers.get("cache-control"), "no-store");
     }
     assert.deepEqual(requests, [{ action: "get_msg", params: { message_id: messageId } }]);
@@ -112,14 +112,14 @@ test("native QQ video registration, cached redirects and shared OneBot refresh",
     const cached = await fetch(shortLink, { method: "HEAD", redirect: "manual" });
     assert.equal(cached.status, 302);
     assert.equal(cached.headers.get("location"),
-      "https://multimedia.nt.qq.com.cn/download?clip=1&rkey=1");
+      "https://multimedia.nt.qq.com.cn/download?clip=1&rkey=1&filename=placeholder.mp4");
     assert.equal(requests.length, 1);
 
     now += 5 * 60 * 1000;
     const refreshed = await fetch(shortLink, { redirect: "manual" });
     assert.equal(refreshed.status, 302);
     assert.equal(refreshed.headers.get("location"),
-      "https://multimedia.nt.qq.com.cn/download?clip=1&rkey=2");
+      "https://multimedia.nt.qq.com.cn/download?clip=1&rkey=2&filename=placeholder.mp4");
     assert.equal(requests.length, 2);
 
     const noVideo = (await (await register(-999)).json()) as { id: string };

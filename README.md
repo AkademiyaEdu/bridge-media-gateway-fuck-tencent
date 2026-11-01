@@ -43,7 +43,7 @@ pnpm dev
 - `storage.publicBaseUrl` 是图片和媒体链接的公网域名。
 - `onebot.url` **必须是 OneBot HTTP API**，不能填 WebSocket 地址；无需公网开放。若未设置 OneBot Token，`accessToken` 可以留空。
 - `config.json` 被 Git 忽略。默认从**当前工作目录**读取，也可以仅通过 `CONFIG_PATH` 指定其它位置（方便 NixOS 服务）。
-- 原有 SQLite `avatar` 表不变；`media_file` 和 `media_video` 表会自动创建。头像、群文件和原生视频共用一个 `MediaDatabase` 实例。
+- 原有 SQLite `avatar` 表不变；`media_file` 和 `media_video` 表会自动创建。旧版 `media_file` 会自动新增 `file_name` 列，已有短链保持不变。头像、群文件和原生视频共用一个 `MediaDatabase` 实例。
 
 检查：
 
@@ -89,11 +89,12 @@ Content-Type: application/json
   "type": "file",
   "groupId": 1107219739,
   "fileId": "原始 QQ 群文件 file_id",
-  "busId": 104
+  "busId": 104,
+  "fileName": "2025-10-05_08-19-18.mp4"
 }
 ```
 
-`busId` 不提供时默认 `102`，有真实值时请传实际值。返回（HTTP 201）：
+`busId` 不提供时默认 `102`，有真实值时请传实际值。`fileName` 取自 OneBot 文件消息的 `data.name`，网关会保存文件名，并在刷新 FTN 下载链接时覆盖 `fname`，以恢复下载文件名和对应 MIME 类型。旧请求不提供 `fileName` 仍可使用。返回（HTTP 201）：
 
 ```json
 {
@@ -115,7 +116,7 @@ Content-Type: application/json
 }
 ```
 
-`messageId` 是 OneBot 消息事件的 `message_id`（**可能为负数**），不是 QQ 官方 Bot 的消息 ID，也不是视频 URL 或文件名。重复登记同一 `messageId` 返回同一短链。网关通过 OneBot `get_msg` 读取 `message` 数组中的 `video.data.url`；若消息已无法读取或找不到有效视频 URL，返回 502。
+`messageId` 是 OneBot 消息事件的 `message_id`（**可能为负数**），不是 QQ 官方 Bot 的消息 ID，也不是视频 URL 或文件名。重复登记同一 `messageId` 返回同一短链。网关通过 OneBot `get_msg` 读取 `message` 数组中的 `video.data.url`，并向链接添加 `filename=placeholder.mp4`，使腾讯 multimedia CDN 返回正确的视频 MIME 类型；若消息已无法读取或找不到有效视频 URL，返回 502。
 
 新媒体 ID 是 **11 位大小写敏感 Base62**（`a-zA-Z0-9`）随机字符。数据库对 `(groupId, fileId, busId)` 去重，重复登记返回同一 ID。旧版本已经登记的 UUID 仍能正常访问，不需要迁移数据库。
 

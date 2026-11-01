@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { MediaDatabase } from "../src/db.js";
 import { MediaStore, generateMediaId } from "../src/store/media.js";
@@ -48,7 +49,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
         JSON.stringify({
           status: "ok",
           retcode: 0,
-          data: { url: `https://tjc-download.ftn.qq.com/file?refresh=${requests.length}` },
+          data: { url: `https://tjc-download.ftn.qq.com/file?refresh=${requests.length}&fname=%2Ftest-file` },
         }),
       );
     }
@@ -76,7 +77,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
   }
 
   try {
-    const file = { type: "file", groupId: 1107219739, fileId: "test-file", busId: 104 };
+    const file = { type: "file", groupId: 1107219739, fileId: "test-file", busId: 104, fileName: "2025-10-05_08-19-18.mp4" };
     assert.equal((await register(file, false)).status, 401);
     assert.equal((await register({ type: "video", messageId: "invalid" })).status, 400);
 
@@ -86,6 +87,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
     assert.match(stored.id, /^[a-zA-Z0-9]{11}$/);
     assert.equal(stored.url, `https://media.example.com/media/${stored.id}`);
     assert.equal((db.fileById.get(stored.id) as { file_id: string }).file_id, file.fileId);
+    assert.equal((db.fileById.get(stored.id) as { file_name: string }).file_name, file.fileName);
 
     const reopened = new MediaDatabase(dbPath);
     assert.equal(new MediaStore(reopened, "https://media.example.com", onebotUrl).registerFile(file).id, stored.id);
@@ -104,7 +106,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
       redirect: "manual",
     });
     assert.equal(redirect.status, 302);
-    assert.equal(redirect.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1");
+    assert.equal(redirect.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1&fname=2025-10-05_08-19-18.mp4");
     assert.equal(redirect.headers.get("cache-control"), "no-store");
 
     const head = await fetch(new URL(`media/${stored.id}`, gatewayUrl), {
@@ -112,14 +114,14 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
       redirect: "manual",
     });
     assert.equal(head.status, 302);
-    assert.equal(head.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1");
+    assert.equal(head.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1&fname=2025-10-05_08-19-18.mp4");
     assert.equal(requests.length, 1);
 
     now += 5 * 60 * 1000 - 1;
     const beforeExpiry = await fetch(new URL(`media/${stored.id}`, gatewayUrl), {
       redirect: "manual",
     });
-    assert.equal(beforeExpiry.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1");
+    assert.equal(beforeExpiry.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=1&fname=2025-10-05_08-19-18.mp4");
     assert.equal(requests.length, 1);
 
     now++;
@@ -127,7 +129,7 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
       redirect: "manual",
     });
     assert.equal(refreshed.status, 302);
-    assert.equal(refreshed.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=2");
+    assert.equal(refreshed.headers.get("location"), "https://tjc-download.ftn.qq.com/file?refresh=2&fname=2025-10-05_08-19-18.mp4");
     assert.deepEqual(requests, [
       {
         action: "get_group_file_url",
@@ -139,9 +141,21 @@ test("file registration, cached OneBot URL and redirect", async (t) => {
       },
     ]);
 
+    // Re-registering a file updates its name and invalidates the cached redirect.
+    const corrected = { ...file, fileName: "corrected video.mp4" };
+    assert.deepEqual(await (await register(corrected)).json(), stored);
+    assert.equal((db.fileById.get(stored.id) as { file_name: string }).file_name, corrected.fileName);
+    const correctedRedirect = await fetch(new URL(`media/${stored.id}`, gatewayUrl), {
+      redirect: "manual",
+    });
+    assert.equal(
+      correctedRedirect.headers.get("location"),
+      "https://tjc-download.ftn.qq.com/file?refresh=3&fname=corrected+video.mp4",
+    );
+
     // Files registered by the previous UUID implementation keep working.
     const oldId = "2e48cc68-9e5c-48d1-9524-080e6ee8ff54";
-    db.insertFile.run(oldId, 1107219739, "legacy-file", 102);
+    db.insertFile.run(oldId, 1107219739, "legacy-file", 102, null);
     const oldRedirect = await fetch(new URL(`media/${oldId}`, gatewayUrl), {
       redirect: "manual",
     });
@@ -228,6 +242,41 @@ test("concurrent refreshes share one OneBot request and failures are not cached"
     respond(success("https://tjc-download.ftn.qq.com/second"));
     assert.equal(await retry, "https://tjc-download.ftn.qq.com/second");
     assert.equal(requests, 3);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("existing media_file schema automatically gains file_name", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bridge-media-migration-"));
+  const path = join(dir, "legacy.db");
+  const oldDatabase = new DatabaseSync(path);
+  oldDatabase.exec(`
+    CREATE TABLE media_file (
+      id TEXT PRIMARY KEY,
+      group_id INTEGER NOT NULL,
+      file_id TEXT NOT NULL,
+      bus_id INTEGER NOT NULL,
+      UNIQUE (group_id, file_id, bus_id)
+    ) STRICT;
+    INSERT INTO media_file (id, group_id, file_id, bus_id)
+      VALUES ('old-id', 123, '/old-file', 102);
+  `);
+  oldDatabase.close();
+
+  const db = new MediaDatabase(path);
+  try {
+    assert.equal((db.fileById.get("old-id") as { file_name: string | null }).file_name, null);
+    const media = new MediaStore(db, "https://media.example.com", "http://onebot.test");
+    const registered = media.registerFile({
+      groupId: 123,
+      fileId: "/old-file",
+      busId: 102,
+      fileName: "restored.mp4",
+    });
+    assert.equal(registered.id, "old-id");
+    assert.equal((db.fileById.get("old-id") as { file_name: string }).file_name, "restored.mp4");
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

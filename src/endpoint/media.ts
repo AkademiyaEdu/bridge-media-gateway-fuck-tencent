@@ -11,7 +11,7 @@ function parseMediaRegistration(value: unknown): MediaRegistration {
     throw new Error("Expected a media object");
   }
 
-  const { type, groupId, fileId, busId: providedBusId, messageId } =
+  const { type, groupId, fileId, fileName, busId: providedBusId, messageId } =
     value as Record<string, unknown>;
 
   if (type === "video") {
@@ -29,6 +29,7 @@ function parseMediaRegistration(value: unknown): MediaRegistration {
     groupId <= 0 ||
     typeof fileId !== "string" ||
     !fileId ||
+    (fileName !== undefined && (typeof fileName !== "string" || !fileName)) ||
     typeof busId !== "number" ||
     !Number.isSafeInteger(busId) ||
     busId < 0
@@ -36,7 +37,7 @@ function parseMediaRegistration(value: unknown): MediaRegistration {
     throw new Error("Invalid file registration");
   }
 
-  return { type, groupId, fileId, busId };
+  return { type, groupId, fileId, busId, fileName: fileName as string | undefined };
 }
 
 export function registerMediaEndpoint(router: Router, media: MediaStore, apiToken: string): void {
