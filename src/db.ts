@@ -13,6 +13,9 @@ export class MediaDatabase {
   public readonly insertVideo;
   public readonly videoIdByMessageId;
   public readonly videoMessageIdById;
+  public readonly insertForwardVideo;
+  public readonly forwardVideoIdByIdentity;
+  public readonly forwardVideoById;
 
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -35,6 +38,13 @@ export class MediaDatabase {
       CREATE TABLE IF NOT EXISTS media_video (
         id TEXT PRIMARY KEY,
         message_id INTEGER NOT NULL UNIQUE
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS media_forward_video (
+        id TEXT PRIMARY KEY,
+        forward_id TEXT NOT NULL,
+        node_index INTEGER NOT NULL,
+        UNIQUE (forward_id, node_index)
       ) STRICT;
     `);
 
@@ -66,6 +76,15 @@ export class MediaDatabase {
     );
     this.videoMessageIdById = this.db.prepare(
       "SELECT message_id FROM media_video WHERE id = ?",
+    );
+    this.insertForwardVideo = this.db.prepare(
+      "INSERT OR IGNORE INTO media_forward_video (id, forward_id, node_index) VALUES (?, ?, ?)",
+    );
+    this.forwardVideoIdByIdentity = this.db.prepare(
+      "SELECT id FROM media_forward_video WHERE forward_id = ? AND node_index = ?",
+    );
+    this.forwardVideoById = this.db.prepare(
+      "SELECT forward_id, node_index FROM media_forward_video WHERE id = ?",
     );
   }
 

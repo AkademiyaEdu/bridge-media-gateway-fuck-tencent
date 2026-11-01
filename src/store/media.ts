@@ -74,6 +74,25 @@ export class MediaStore {
     };
   }
 
+  registerForwardVideo(forwardId: string, nodeIndex: number): { id: string; url: string } {
+    const existing = this.db.forwardVideoIdByIdentity.get(forwardId, nodeIndex) as
+      | { id: string }
+      | undefined;
+
+    let id = existing?.id;
+    if (!id) {
+      for (;;) {
+        id = generateMediaId();
+        if (this.db.insertForwardVideo.run(id, forwardId, nodeIndex).changes) break;
+      }
+    }
+
+    return {
+      id,
+      url: new URL(`/media/${id}`, this.publicBaseUrl).toString(),
+    };
+  }
+
   getDownloadUrl(id: string): Promise<string | null> {
     const cached = this.downloadUrlCache.get(id);
     if (cached) {
@@ -117,12 +136,24 @@ export class MediaStore {
       const video = this.db.videoMessageIdById.get(id) as
         | { message_id: number }
         | undefined;
-      if (!video) return null;
+      if (video) {
+        const data = await this.requestOnebot<{
+          message?: { type: string; data?: { url?: string } }[];
+        }>("get_msg", { message_id: video.message_id });
+        rawUrl = data.message?.find((segment) => segment.type === "video")?.data?.url;
+      } else {
+        // Forwarded nodes cannot be retrieved with get_msg; resolve them via get_forward_msg.
+        const forward = this.db.forwardVideoById.get(id) as
+          | { forward_id: string; node_index: number }
+          | undefined;
+        if (!forward) return null;
 
-      const data = await this.requestOnebot<{
-        message?: { type: string; data?: { url?: string } }[];
-      }>("get_msg", { message_id: video.message_id });
-      rawUrl = data.message?.find((segment) => segment.type === "video")?.data?.url;
+        const data = await this.requestOnebot<{
+          messages?: { message?: { type: string; data?: { url?: string } }[] }[];
+        }>("get_forward_msg", { id: forward.forward_id });
+        rawUrl = data.messages?.[forward.node_index]?.message
+          ?.find((segment) => segment.type === "video")?.data?.url;
+      }
     }
 
     if (typeof rawUrl !== "string") {
