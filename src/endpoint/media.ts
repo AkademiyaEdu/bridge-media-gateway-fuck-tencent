@@ -16,42 +16,41 @@ function parseMediaRegistration(value: unknown): MediaRegistration {
     value as Record<string, unknown>;
 
   if (type === "video") {
-    if (typeof messageId !== "number" || !Number.isSafeInteger(messageId)) {
-      throw new Error("Invalid video registration");
+    if (typeof messageId === "number" && Number.isSafeInteger(messageId)) {
+      return { type, messageId };
     }
-    return { type, messageId };
+    throw new Error("Invalid video registration");
   }
 
   if (type === "forwardVideo") {
     if (
-      typeof forwardId !== "string" ||
-      !forwardId ||
-      typeof nodeIndex !== "number" ||
-      !Number.isSafeInteger(nodeIndex) ||
-      nodeIndex < 0
+      typeof forwardId === "string" &&
+      forwardId.length > 0 &&
+      typeof nodeIndex === "number" &&
+      Number.isSafeInteger(nodeIndex) &&
+      nodeIndex >= 0
     ) {
-      throw new Error("Invalid forward video registration");
+      return { type, forwardId, nodeIndex };
     }
-    return { type, forwardId, nodeIndex };
+    throw new Error("Invalid forward video registration");
   }
 
   const busId = providedBusId === undefined ? 102 : providedBusId;
   if (
-    type !== "file" ||
-    typeof groupId !== "number" ||
-    !Number.isSafeInteger(groupId) ||
-    groupId <= 0 ||
-    typeof fileId !== "string" ||
-    !fileId ||
-    (fileName !== undefined && (typeof fileName !== "string" || !fileName)) ||
-    typeof busId !== "number" ||
-    !Number.isSafeInteger(busId) ||
-    busId < 0
+    type === "file" &&
+    typeof groupId === "number" &&
+    Number.isSafeInteger(groupId) &&
+    groupId > 0 &&
+    typeof fileId === "string" &&
+    fileId.length > 0 &&
+    (fileName === undefined || (typeof fileName === "string" && fileName.length > 0)) &&
+    typeof busId === "number" &&
+    Number.isSafeInteger(busId) &&
+    busId >= 0
   ) {
-    throw new Error("Invalid file registration");
+    return { type, groupId, fileId, busId, fileName: fileName as string | undefined };
   }
-
-  return { type, groupId, fileId, busId, fileName: fileName as string | undefined };
+  throw new Error("Invalid file registration");
 }
 
 export function registerMediaEndpoint(router: Router, media: MediaStore, apiToken: string): void {
